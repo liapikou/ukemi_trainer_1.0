@@ -1,0 +1,2632 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Ukemi Sound Trainer</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Ukemi">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<script>
+if ('serviceWorker' in navigator && location.protocol === 'https:') {
+  addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(()=>{}));
+}
+</script>
+<meta name="description" content="Real-time sound feedback for the judo backward breakfall. A camera follows your body and every landing has its own sound.">
+<meta name="theme-color" content="#f4f1eb">
+<script>try{var t=localStorage.getItem('ukemi.theme');if(t)document.documentElement.dataset.theme=t;}catch(e){}</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Shippori+Mincho:wght@500;700&display=swap" rel="stylesheet">
+<style>
+/* ============================================================
+   Ukemi Sound Trainer — design system
+   White judogi cotton, sumi black, one vermilion seal.
+   Light by default, follows the system, toggle in the top bar.
+   Stage, camera and chart are always sumi (dark) so the
+   body-part colours stay the same everywhere.
+   ============================================================ */
+:root{
+  --bg:#f5f5f2;
+  --surface:#ffffff;
+  --surface2:#ecece8;
+  --ink:#121214;
+  --muted:#55555a;
+  --faint:#6b6b70;
+  --line:rgba(18,18,20,.12);
+  --line-strong:rgba(18,18,20,.28);
+  --shu:#c92a17;              /* seal vermilion: buttons, the one accent */
+  --shu-ink:#b32313;          /* vermilion as text on this background */
+  --on-shu:#ffffff;
+  --good:#1f7a43;
+  --bad:#b32313;
+  --busy:#8a5a00;
+  --focus:#1d5fd1;
+  --shadow:0 1px 2px rgba(18,18,20,.04),0 12px 32px -12px rgba(18,18,20,.12);
+
+  --sumi:#0b0b0d;             /* stage black */
+  --sans:-apple-system,BlinkMacSystemFont,"SF Pro Display","SF Pro Text","Inter","Helvetica Neue",Arial,sans-serif;
+  --jp:"Hiragino Mincho ProN","Yu Mincho","Shippori Mincho","Noto Serif JP",serif;
+
+  --r-xl:32px; --r-lg:22px; --r:14px; --r-sm:10px;
+  --maxw:1160px;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0e0e10; --surface:#18181b; --surface2:#232327; --ink:#f4f4f0; --muted:#b1b1b6; --faint:#96969b;
+    --line:rgba(244,244,240,.13); --line-strong:rgba(244,244,240,.32);
+    --shu-ink:#ff7a66; --good:#6fd08f; --bad:#ff7a66; --busy:#f2b84b; --focus:#8ab4ff;
+    --shadow:none; --sumi:#000000; color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0e0e10; --surface:#18181b; --surface2:#232327; --ink:#f4f4f0; --muted:#b1b1b6; --faint:#96969b;
+  --line:rgba(244,244,240,.13); --line-strong:rgba(244,244,240,.32);
+  --shu-ink:#ff7a66; --good:#6fd08f; --bad:#ff7a66; --busy:#f2b84b; --focus:#8ab4ff;
+  --shadow:none; --sumi:#000000; color-scheme:dark;
+}
+/* dark islands inside either theme */
+.sumi{
+  --surface:#18181b; --surface2:#232327; --ink:#f4f4f0; --muted:#b1b1b6; --faint:#96969b;
+  --line:rgba(244,244,240,.14); --line-strong:rgba(244,244,240,.34);
+  --shu-ink:#ff7a66; --good:#6fd08f; --bad:#ff7a66; --busy:#f2b84b; --focus:#8ab4ff;
+  background:var(--sumi); color:var(--ink); color-scheme:dark;
+}
+
+*{box-sizing:border-box;margin:0;padding:0}
+html{-webkit-text-size-adjust:100%}
+body{
+  background:var(--bg); color:var(--ink);
+  font-family:var(--sans); font-size:16px; line-height:1.55;
+  -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;
+}
+::selection{background:var(--shu);color:#fff}
+h1,h2,h3,h4{font-weight:600;line-height:1.12;letter-spacing:-.02em}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer;background:none;border:0}
+[hidden]{display:none !important}
+:focus-visible{outline:2px solid var(--focus);outline-offset:2px;border-radius:6px}
+[lang="ja"]{font-family:var(--jp)}
+[lang="ja"] [lang="en"]{font-family:var(--sans)}
+b{font-weight:600}
+
+/* ---------- opening seal ---------- */
+#splash{position:fixed;inset:0;z-index:200;display:grid;place-items:center;background:var(--bg);transition:opacity .5s ease}
+#splash .seal{width:112px;height:112px;animation:stamp .7s cubic-bezier(.2,.9,.25,1) both;filter:drop-shadow(0 18px 30px rgba(201,42,23,.28))}
+#splash.gone{opacity:0;pointer-events:none}
+@keyframes stamp{0%{opacity:0;transform:scale(1.28) rotate(-5deg)}55%{opacity:1;transform:scale(.97) rotate(0)}100%{opacity:1;transform:scale(1)}}
+
+/* ---------- top bar ---------- */
+.topbar{
+  position:sticky;top:0;z-index:80;height:56px;display:flex;align-items:center;gap:20px;
+  padding:0 max(22px,env(safe-area-inset-left)) 0 max(22px,env(safe-area-inset-right));
+  background:color-mix(in srgb,var(--bg) 80%,transparent);
+  -webkit-backdrop-filter:saturate(1.6) blur(18px);backdrop-filter:saturate(1.6) blur(18px);
+  border-bottom:1px solid var(--line);
+}
+.brand{display:flex;align-items:center;gap:10px;min-width:0}
+.brand .seal{width:28px;height:28px;flex:none}
+.brand .name{font-weight:600;font-size:15px;letter-spacing:-.01em;white-space:nowrap}
+.tabs{display:flex;gap:2px;margin:0 auto}
+.navlink{
+  position:relative;display:flex;align-items:center;gap:7px;height:36px;padding:0 14px;border-radius:999px;
+  font-size:14px;font-weight:500;color:var(--muted);transition:color .15s,background .15s;white-space:nowrap;
+}
+.navlink .kj{font-family:var(--jp);font-size:13px;color:var(--faint)}
+.navlink:hover{color:var(--ink)}
+.navlink.active{color:var(--ink);background:var(--surface2)}
+.navlink.active .kj{color:var(--shu-ink)}
+.iconbtn{width:36px;height:36px;border-radius:50%;display:grid;place-items:center;color:var(--muted);flex:none}
+.iconbtn:hover{background:var(--surface2);color:var(--ink)}
+.moon{width:16px;height:16px;border-radius:50%;box-shadow:inset -5px -3px 0 0 currentColor;transform:rotate(-20deg)}
+
+/* ---------- page ---------- */
+.main{min-width:0}
+.view{display:none;max-width:var(--maxw);margin:0 auto;padding:64px 32px 40px}
+.view.active{display:block}
+.jpline{font-size:17px;color:var(--shu-ink);margin-bottom:14px;letter-spacing:.04em}
+.jpline [lang="en"]{font-size:14px;color:var(--faint);letter-spacing:0;margin-left:8px}
+.title{font-size:clamp(34px,4.6vw,52px);letter-spacing:-.03em;line-height:1.04;max-width:20ch;text-wrap:balance}
+.title.xl{font-size:clamp(42px,7.4vw,88px);letter-spacing:-.045em;line-height:.98;max-width:none}
+.lead{font-size:clamp(17px,1.5vw,20px);line-height:1.5;color:var(--muted);max-width:60ch;margin-top:22px;text-wrap:pretty}
+.hero{padding:16px 0 8px}
+.cta{display:flex;flex-wrap:wrap;gap:12px;margin-top:30px}
+.h-sm{font-size:17px;letter-spacing:-.01em}
+.h-sec{font-size:24px;margin:56px 0 20px}
+.note{font-size:13.5px;line-height:1.5;color:var(--faint);margin-top:10px}
+.note b{color:var(--ink)}
+.note.wide{max-width:62ch;font-size:14.5px;color:var(--muted)}
+.note.good{color:var(--good)} .note.bad{color:var(--bad)} .note.busy{color:var(--busy)}
+.dot{display:inline-block;width:9px;height:9px;border-radius:50%;flex:none}
+.card{background:var(--surface);border-radius:var(--r-lg);box-shadow:var(--shadow)}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]) .card{border:1px solid var(--line)} }
+:root[data-theme="dark"] .card{border:1px solid var(--line)}
+
+/* ---------- buttons ---------- */
+.btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:9px;min-height:44px;padding:0 20px;border-radius:999px;
+  font-size:15px;font-weight:600;letter-spacing:-.005em;color:var(--ink);background:var(--surface2);
+  transition:transform .12s ease,filter .15s,background .15s;user-select:none;white-space:nowrap;
+}
+.btn:hover{filter:brightness(.96)}
+.btn:active{transform:scale(.97)}
+.btn.primary{background:var(--shu);color:var(--on-shu)}
+.btn.primary:hover{filter:brightness(1.07)}
+.btn.ghost{background:transparent;box-shadow:inset 0 0 0 1px var(--line-strong)}
+.btn.ghost:hover{background:var(--surface2);filter:none}
+.btn.warn{color:var(--bad)}
+.btn.lg{min-height:52px;padding:0 26px;font-size:17px}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.tri{display:inline-block;width:0;height:0;border-left:9px solid currentColor;border-top:6px solid transparent;border-bottom:6px solid transparent;margin-left:2px}
+.spin{display:inline-block;width:26px;height:26px;border-radius:50%;border:2.5px solid var(--line-strong);border-top-color:var(--ink);animation:spin .9s linear infinite}
+@keyframes spin{to{transform:rotate(1turn)}}
+
+.seg{display:inline-flex;padding:3px;border-radius:999px;background:var(--surface2)}
+.seg button{min-height:38px;padding:0 14px;border-radius:999px;font-size:13.5px;font-weight:500;color:var(--muted);white-space:nowrap}
+.seg button.on{background:var(--surface);color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.18)}
+.sumi .seg button.on,:root[data-theme="dark"] .seg button.on{background:#3a3a40}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]) .seg button.on{background:#3a3a40} }
+.seg.full{display:flex}
+.seg.full button{flex:1;padding:0 6px}
+
+/* ---------- the dojo: stage + landing order ---------- */
+.dojo{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(250px,.9fr);border-radius:var(--r-xl);overflow:hidden;margin-top:56px}
+.dojo-stage{padding:14px 14px 22px;min-width:0}
+.stage{position:relative;aspect-ratio:4/3;border-radius:22px;overflow:hidden;
+  background:radial-gradient(90% 70% at 50% 8%,#1d1d21 0%,#0b0b0d 70%)}
+:root[data-theme="dark"] .stage{background:radial-gradient(90% 70% at 50% 8%,#17171a 0%,#000 70%)}
+.stage canvas{position:absolute;inset:0;width:100%;height:100%}
+.stage .mode-tag{position:absolute;left:18px;top:16px;font-size:13px;color:var(--muted)}
+.controls{display:flex;flex-wrap:wrap;gap:10px;align-items:center;padding:16px 8px 0}
+.controls .warn{margin-left:auto}
+.dojo-side{padding:34px 30px 28px;border-left:1px solid var(--line);display:flex;flex-direction:column}
+.side-h{font-size:15px;font-weight:600;color:var(--muted);letter-spacing:0;margin-bottom:8px}
+.seq{display:flex;flex-direction:column}
+.seq .step{
+  display:grid;grid-template-columns:30px 1fr auto;align-items:center;gap:14px;width:100%;text-align:left;
+  padding:15px 2px;border-bottom:1px solid var(--line);border-radius:0;transition:background .2s;
+}
+.seq .step .ord{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;font-size:13px;font-weight:600;
+  color:var(--bp);box-shadow:inset 0 0 0 1.5px var(--bp);transition:.2s}
+.seq .step .nm{font-size:19px;font-weight:600;letter-spacing:-.015em;display:flex;align-items:baseline;gap:9px}
+.seq .step .nm small{font-size:14px;font-weight:500;color:var(--faint)}
+.seq .step .hz{font-size:13px;color:var(--muted);text-align:right}
+.seq .step.fired .ord{background:var(--bp);color:#0b0b0d}
+.seq .step.flash{animation:flash .5s ease}
+@keyframes flash{0%{background:color-mix(in srgb,var(--bp) 40%,transparent)}100%{background:transparent}}
+.seq .step.err .ord{box-shadow:inset 0 0 0 1.5px #ff5a4a;color:#ff5a4a}
+.seq .step.protected{--bp:#7fd08a;border-bottom:0}
+.seq .step.protected .ord{box-shadow:none;background:none;border:1.5px dashed var(--bp)}
+.seq .step.protected .nm{color:var(--muted);font-weight:500}
+.seq .step.protected .hz{color:var(--bp)}
+.force{margin-top:auto;padding-top:26px}
+
+/* ---------- fields ---------- */
+.field{margin-bottom:22px}
+.field label,.flabel{display:flex;justify-content:space-between;align-items:baseline;font-size:13.5px;font-weight:500;color:var(--muted);margin-bottom:9px}
+.field label span{color:var(--ink);font-variant-numeric:tabular-nums}
+input[type=range]{width:100%;accent-color:var(--shu);height:28px}
+.row{display:flex;gap:10px}
+.row.wrap{flex-wrap:wrap}
+.row > .btn{flex:1}
+.sel,.txtin,textarea{width:100%;min-height:44px;background:var(--bg);border:1px solid var(--line-strong);border-radius:var(--r-sm);padding:10px 12px;font-size:15px;outline-offset:0}
+.check{display:flex;gap:12px;align-items:flex-start;font-size:14px;color:var(--muted);margin-bottom:20px;cursor:pointer}
+.check input{width:20px;height:20px;flex:none;margin-top:1px;accent-color:var(--shu)}
+
+/* ---------- level + sound pickers ---------- */
+.pickers{display:grid;grid-template-columns:1fr 1fr;gap:48px;margin-top:48px}
+.pickers .h-sm{margin-bottom:14px}
+.proglevels{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+.proglevel{
+  display:grid;grid-template-columns:1fr auto;gap:2px 10px;text-align:left;padding:14px 16px;border-radius:var(--r);
+  background:var(--surface);box-shadow:inset 0 0 0 1px var(--line);transition:box-shadow .15s,background .15s;
+}
+.proglevel:hover{box-shadow:inset 0 0 0 1px var(--line-strong)}
+.proglevel.on{box-shadow:inset 0 0 0 2px var(--ink)}
+.proglevel .lv{font-size:12.5px;color:var(--faint);grid-column:1}
+.proglevel .nm{font-size:16px;font-weight:600;letter-spacing:-.01em;grid-column:1}
+.proglevel .jp{font-size:13px;color:var(--faint);grid-column:2;grid-row:1;justify-self:end}
+.proglevel .diff{display:flex;gap:3px;grid-column:2;grid-row:2;align-self:center;justify-self:end}
+.proglevel .diff i{width:6px;height:6px;border-radius:50%;background:var(--line-strong)}
+.proglevel .diff i.f{background:var(--shu)}
+.proglevels.compact .proglevel{padding:10px 12px}
+.proglevels.compact .nm{font-size:14px}
+.proglevels.compact .jp{display:none}
+.modechips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{
+  display:inline-flex;align-items:center;gap:8px;min-height:40px;padding:0 15px 0 12px;border-radius:999px;font-size:14.5px;font-weight:500;
+  color:var(--ink);background:var(--surface);box-shadow:inset 0 0 0 1px var(--line);transition:.15s;
+}
+.chip:hover{box-shadow:inset 0 0 0 1px var(--line-strong)}
+.chip .n{font-size:12px;font-weight:600;color:var(--faint);font-variant-numeric:tabular-nums}
+.chip.on{background:var(--ink);color:var(--bg);box-shadow:none}
+.chip.on .n{color:inherit;opacity:.65}
+
+.aside-note{margin-top:44px;padding-left:18px;border-left:2px solid #4c9a57;max-width:74ch;font-size:15px;color:var(--muted)}
+.aside-note b{color:var(--ink)}
+.trio{display:grid;grid-template-columns:repeat(3,1fr);gap:40px;margin-top:72px;padding-top:40px;border-top:1px solid var(--line)}
+.trio h3{font-size:20px;margin-bottom:8px}
+.trio p{color:var(--muted);font-size:15.5px;max-width:34ch}
+
+/* ---------- trainer ---------- */
+.quickstart{display:flex;align-items:center;gap:20px;flex-wrap:wrap;margin:40px 0 20px}
+.qs-steps{display:flex;gap:28px;list-style:none;flex-wrap:wrap}
+.qs-step{display:flex;align-items:center;gap:11px;color:var(--faint)}
+.qs-n{width:32px;height:32px;border-radius:50%;display:grid;place-items:center;font-size:14px;font-weight:600;box-shadow:inset 0 0 0 1.5px var(--line-strong);flex:none}
+.qs-t b{display:block;font-size:15.5px;line-height:1.2}
+.qs-t small{font-size:13px}
+.qs-step.on{color:var(--ink)}
+.qs-step.on .qs-n{box-shadow:inset 0 0 0 2px var(--ink)}
+.qs-step.done{color:var(--muted)}
+.qs-step.done .qs-n{background:var(--ink);color:var(--bg);box-shadow:none}
+.qs-ctrl{display:flex;align-items:center;gap:10px;margin-left:auto;flex-wrap:wrap}
+.qs-delay{display:flex;gap:3px;align-items:center;padding:3px;border-radius:999px;background:var(--surface2)}
+.qs-delay .lbl{font-size:13px;color:var(--muted);padding:0 8px 0 12px}
+.qs-delay button{min-width:44px;min-height:38px;padding:0 10px;border-radius:999px;font-size:13.5px;font-weight:500;color:var(--muted)}
+.qs-delay button.on{background:var(--surface);color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.18)}
+:root[data-theme="dark"] .qs-delay button.on{background:#3a3a40}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]) .qs-delay button.on{background:#3a3a40} }
+
+.trainer{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(280px,.9fr);gap:24px;align-items:start}
+.trainer.research{grid-template-columns:minmax(0,.9fr) minmax(0,1.1fr);margin-top:40px}
+.trainer.research .panel + .panel{margin-top:24px}
+.videobox{position:relative;border-radius:var(--r-xl);overflow:hidden;aspect-ratio:4/3}
+.videobox video,.videobox canvas{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;transform:scaleX(-1)}
+.videobox.nomirror video,.videobox.nomirror canvas{transform:none}
+.videobox .overlay{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:12px;padding:40px;
+  background:radial-gradient(90% 70% at 50% 8%,#1d1d21 0%,#0b0b0d 70%)}
+.videobox .overlay .ic{width:64px;height:64px;border-radius:50%;display:grid;place-items:center;box-shadow:inset 0 0 0 1.5px var(--line-strong);font-size:22px;font-weight:600;margin-bottom:6px}
+.videobox .overlay h3{font-size:24px}
+.videobox .overlay p{color:var(--muted);max-width:40ch;font-size:15px}
+.videobox .hud{position:absolute;left:14px;top:14px;z-index:3;max-width:calc(100% - 28px);font-size:13px;line-height:1.35;padding:7px 12px 7px 26px;border-radius:999px;
+  background:rgba(11,11,13,.72);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);color:var(--muted)}
+.videobox .hud::before{content:"";position:absolute;left:11px;top:13px;width:7px;height:7px;border-radius:50%;background:currentColor}
+.videobox .hud.ok{color:#d9f2e0} .videobox .hud.ok::before{background:#6fd08f}
+.videobox .hud.warn{color:#f6e2b3} .videobox .hud.warn::before{background:#f2b84b}
+.videobox .hud.err{color:#ffd0c8} .videobox .hud.err::before{background:#ff5a4a}
+.statline{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:0;margin-top:18px}
+.stat{padding:4px 16px 4px 0;border-left:1px solid var(--line);padding-left:16px}
+.stat:first-child{border-left:0;padding-left:0}
+.stat .k{font-size:13px;color:var(--faint)}
+.stat .v{font-size:28px;font-weight:600;letter-spacing:-.02em;font-variant-numeric:tabular-nums;display:flex;align-items:center;gap:8px;min-height:38px}
+.stat .v.sm{font-size:19px}
+.stat .v.bad{color:var(--bad)} .stat .v.good{color:var(--good)}
+.panel{padding:26px}
+.panel .sub{color:var(--muted);font-size:14.5px;margin:8px 0 20px;max-width:66ch}
+.advpanel summary{cursor:pointer;list-style:none;display:flex;align-items:center;justify-content:space-between;user-select:none}
+.advpanel summary::-webkit-details-marker{display:none}
+.advpanel summary::after{content:"";width:8px;height:8px;border-right:2px solid var(--faint);border-bottom:2px solid var(--faint);transform:rotate(45deg);transition:.2s;margin-right:4px}
+.advpanel[open] summary::after{transform:rotate(-135deg)}
+.advpanel[open] summary{margin-bottom:22px}
+.camrow{margin-bottom:6px}
+
+/* ---------- sound library ---------- */
+.modegrid{display:grid;grid-template-columns:repeat(2,1fr);gap:20px}
+#studyModes{grid-template-columns:repeat(3,1fr)}
+.modecard{padding:26px;display:flex;flex-direction:column;gap:18px}
+.modecard .top{display:flex;gap:14px;align-items:flex-start}
+.modecard .num{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;flex:none;font-size:15px;font-weight:600;background:var(--ink);color:var(--surface)}
+.modecard .mt{font-size:21px;letter-spacing:-.02em}
+.modecard .kind{font-size:13.5px;color:var(--faint);margin-top:3px}
+.modecard .desc{color:var(--muted);font-size:15.5px;line-height:1.5}
+.modecard .play{display:flex;gap:8px;flex-wrap:wrap}
+.bp-btn{display:inline-flex;align-items:center;gap:8px;min-height:40px;padding:0 15px;border-radius:999px;font-size:14px;font-weight:600;background:var(--sumi);color:#f4f4f0;transition:transform .12s}
+:root[data-theme="dark"] .bp-btn{background:#2a2a2f}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]) .bp-btn{background:#2a2a2f} }
+.bp-btn.quiet{background:transparent;color:var(--muted);font-weight:500;box-shadow:inset 0 0 0 1px var(--line-strong)}
+.bp-btn.quiet .dot{box-shadow:0 0 0 1px rgba(18,18,20,.25)}
+.bp-btn:active{transform:scale(.95)}
+.facts{display:grid;gap:10px;font-size:14.5px}
+.facts div{display:grid;grid-template-columns:84px 1fr;gap:10px}
+.facts dt{color:var(--faint)}
+.facts dd{color:var(--ink)}
+.just{margin-top:auto;border-top:1px solid var(--line);padding-top:14px}
+.just summary{cursor:pointer;font-size:14.5px;font-weight:600;list-style:none;display:flex;justify-content:space-between;align-items:center}
+.just summary::-webkit-details-marker{display:none}
+.just summary::after{content:"+";font-size:20px;font-weight:400;color:var(--faint);line-height:1}
+.just[open] summary::after{content:"–"}
+.just p{font-size:14.5px;line-height:1.6;color:var(--muted);margin-top:12px}
+.just p b{color:var(--ink)}
+.just .map{display:flex;flex-wrap:wrap;gap:6px;margin-top:14px}
+.just .map .mp{font-size:12.5px;padding:4px 10px;border-radius:999px;background:var(--surface2);color:var(--muted)}
+.cites{list-style:none;margin-top:12px;font-size:13px;color:var(--faint);display:grid;gap:3px}
+
+/* ---------- science ---------- */
+.prose{max-width:74ch;margin-top:36px}
+.prose p{color:var(--muted);margin-bottom:18px;line-height:1.65;font-size:17px}
+.prose p b{color:var(--ink)}
+.prose h2{font-size:28px;margin:52px 0 16px}
+.prose blockquote{margin:30px 0;padding-left:22px;border-left:2px solid var(--shu);font-size:21px;line-height:1.4;letter-spacing:-.01em;color:var(--ink);text-wrap:pretty}
+.prose blockquote cite{display:block;font-size:14px;font-style:normal;color:var(--faint);margin-top:10px;letter-spacing:0}
+.spectrum{border-radius:var(--r-lg);padding:26px 30px 22px;margin:30px 0 10px}
+.sp-axis{display:flex;justify-content:space-between;font-size:15px;font-weight:600}
+.sp-axis span:last-child{text-align:right}
+.sp-axis small{display:block;font-weight:400;font-size:13px;color:var(--muted)}
+.sp-track{position:relative;height:150px;margin:6px 14px 0}
+.sp-track::before{content:"";position:absolute;left:-14px;right:-14px;top:50%;height:1px;background:var(--line-strong)}
+.sp-pt{position:absolute;top:50%;width:0}
+.sp-pt i{position:absolute;left:-.5px;width:1px;background:var(--line-strong)}
+.sp-pt.up i{bottom:13px;height:20px} .sp-pt.dn i{top:13px;height:20px}
+.sp-pt b{position:absolute;left:-13px;top:-13px;width:26px;height:26px;border-radius:50%;display:grid;place-items:center;font-size:13px;font-weight:600;
+  background:var(--sumi);color:var(--ink);box-shadow:inset 0 0 0 1.5px var(--ink)}
+.sp-pt.core b{background:var(--ink);color:#0b0b0d}
+.sp-pt span{position:absolute;left:0;transform:translateX(-50%);white-space:nowrap;font-size:13.5px;color:var(--ink)}
+.sp-pt.up span{bottom:38px} .sp-pt.dn span{top:38px}
+.sp-pt.l span{transform:translateX(-14px)} .sp-pt.r span{transform:translateX(calc(-100% + 14px))}
+.sp-key{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted);margin:0 !important}
+.sp-key .k{width:12px;height:12px;border-radius:50%;box-shadow:inset 0 0 0 1.5px var(--ink);margin-left:14px}
+.sp-key .k:first-child{margin-left:0}
+.sp-key .k.core{background:var(--ink)}
+.figcap{font-size:13.5px !important;color:var(--faint) !important}
+.tablewrap{overflow-x:auto;margin:26px 0}
+.kvtable{width:100%;border-collapse:collapse;font-size:14.5px;min-width:620px}
+.kvtable th,.kvtable td{text-align:left;padding:12px 14px 12px 0;border-bottom:1px solid var(--line);vertical-align:top}
+.kvtable thead th{font-size:13px;font-weight:500;color:var(--faint)}
+.kvtable tbody th{font-weight:600;white-space:nowrap}
+.kvtable td{color:var(--muted)}
+.kvtable .tn{display:inline-block;width:20px;color:var(--faint);font-weight:500}
+.reflist{list-style:none;display:grid;gap:14px}
+.reflist li{font-size:15px;color:var(--muted);line-height:1.55}
+.reflist li b{color:var(--ink)}
+
+/* ---------- research ---------- */
+.recdot{display:none;width:10px;height:10px;border-radius:50%;background:var(--shu);margin-left:6px;animation:blink 1s infinite;vertical-align:middle}
+@keyframes blink{50%{opacity:.25}}
+#recBtn.rec{background:var(--ink);color:var(--bg)}
+#recStats{margin-top:22px}
+#recStats .stat .v{font-size:22px}
+.qsec{font-size:16px;margin:30px 0 12px;padding-top:22px;border-top:1px solid var(--line)}
+.qsec:first-child{border-top:0;padding-top:0;margin-top:4px}
+.qrow{border:0;margin-bottom:18px;min-width:0}
+.qlabel{display:block;font-size:15px;color:var(--ink);margin-bottom:9px;line-height:1.4;padding:0}
+.qopts{display:flex;flex-wrap:wrap;gap:6px}
+.qopt{cursor:pointer;position:relative}
+.qopt input{position:absolute;opacity:0;inset:0;width:100%;height:100%;cursor:pointer;margin:0}
+.qopt span{display:inline-flex;align-items:center;min-height:36px;padding:0 13px;border-radius:999px;font-size:13.5px;color:var(--muted);box-shadow:inset 0 0 0 1px var(--line-strong);transition:.13s}
+.qopt:hover span{color:var(--ink)}
+.qopt input:checked+span{background:var(--ink);color:var(--bg);box-shadow:none;font-weight:600}
+.qopt input:focus-visible+span{outline:2px solid var(--focus);outline-offset:2px}
+#qForm textarea{resize:vertical;font-size:15px}
+.review{margin-top:24px}
+.review-head{display:flex;justify-content:space-between;align-items:flex-start;gap:24px;flex-wrap:wrap}
+.review-head .sub{margin-bottom:0}
+.plot{position:relative;border-radius:var(--r);margin-top:22px;padding:14px 10px 8px 6px}
+.plotcv{display:block;width:100%;height:240px;touch-action:pan-y}
+.plot-tip{position:absolute;pointer-events:none;min-width:150px;padding:10px 12px;border-radius:12px;background:rgba(40,40,45,.94);font-size:13px;line-height:1.5;box-shadow:0 8px 24px rgba(0,0,0,.4)}
+.plot-tip .tt{font-weight:600;margin-bottom:3px;font-variant-numeric:tabular-nums}
+.plot-tip div:not(.tt){display:flex;align-items:center;gap:7px;color:var(--muted)}
+.plot-tip i{width:8px;height:8px;border-radius:50%;flex:none}
+.plot-tip b{margin-left:auto;padding-left:14px;color:var(--ink);font-variant-numeric:tabular-nums}
+.plot-legend{list-style:none;display:flex;flex-wrap:wrap;gap:6px 22px;margin-top:12px;font-size:13.5px;color:var(--muted)}
+.plot-legend li{display:flex;align-items:center;gap:8px}
+.lgk{display:inline-block;width:12px;height:12px;flex:none;position:relative}
+.lgk.dotm{border-radius:50%;background:var(--muted)}
+.lgk.box{width:18px;border-radius:4px;box-shadow:inset 0 0 0 1.5px var(--faint)}
+.lgk.ring{border-radius:50%;box-shadow:inset 0 0 0 2px #4c9a57}
+.lgk.cross::before,.lgk.cross::after{content:"";position:absolute;left:5px;top:-1px;width:2px;height:14px;background:var(--bad);transform:rotate(45deg)}
+.lgk.cross::after{transform:rotate(-45deg)}
+#assess .statline{margin-top:24px}
+#assess .stat .v{font-size:22px}
+
+/* ---------- footer ---------- */
+.foot{max-width:var(--maxw);margin:40px auto 0;padding:28px 32px 56px;display:flex;align-items:center;gap:16px;border-top:1px solid var(--line);font-size:13.5px;color:var(--faint);line-height:1.45}
+.foot .seal{width:30px;height:30px;flex:none}
+.foot b{color:var(--ink)}
+.foot .for{margin-left:auto;text-align:right}
+
+/* ---------- tablet ---------- */
+@media (max-width:1020px){
+  .dojo{grid-template-columns:1fr}
+  .dojo-side{border-left:0;border-top:1px solid var(--line);padding:26px 26px 26px}
+  .trainer,.trainer.research{grid-template-columns:1fr}
+  .pickers{grid-template-columns:1fr;gap:36px}
+  #studyModes,.modegrid{grid-template-columns:1fr}
+  .brand .name{display:none}
+}
+/* ---------- phone: tabs move to the bottom ---------- */
+@media (max-width:720px){
+  .topbar{justify-content:space-between;height:52px}
+  .brand .name{display:block}
+  .tabs{
+    position:fixed;left:0;right:0;bottom:0;z-index:90;margin:0;gap:0;justify-content:space-around;
+    padding:6px 6px calc(6px + env(safe-area-inset-bottom,0px));
+    background:color-mix(in srgb,var(--bg) 86%,transparent);
+    -webkit-backdrop-filter:saturate(1.6) blur(18px);backdrop-filter:saturate(1.6) blur(18px);
+    border-top:1px solid var(--line);
+  }
+  .navlink{flex:1;flex-direction:column;gap:2px;height:auto;min-height:50px;padding:6px 2px;font-size:11.5px;border-radius:12px;justify-content:center}
+  .navlink .kj{font-size:19px;line-height:1.1;color:var(--muted)}
+  .navlink.active{background:none}
+  .view{padding:36px 16px 24px}
+  .title.xl{font-size:clamp(40px,12.5vw,56px)}
+  .cta .btn{flex:1 1 100%}
+  .dojo{margin:36px -8px 0;border-radius:26px}
+  .dojo-stage{padding:8px 8px 18px}
+  .stage{border-radius:20px}
+  .controls{padding:14px 6px 0;gap:8px}
+  .controls .btn.primary{flex:1 1 40%}
+  .controls .seg{order:5;flex:1 1 100%;display:flex}
+  .controls .seg button{flex:1}
+  .controls .warn{margin-left:0}
+  .dojo-side{padding:22px 20px}
+  .proglevels{grid-template-columns:1fr 1fr}
+  .trio{grid-template-columns:1fr;gap:26px;margin-top:48px;padding-top:30px}
+  .trio p{max-width:none}
+  .quickstart{position:sticky;top:52px;z-index:40;margin:26px -16px 16px;padding:12px 16px;gap:12px;
+    background:color-mix(in srgb,var(--bg) 88%,transparent);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);border-bottom:1px solid var(--line)}
+  .qs-steps{gap:14px;flex-wrap:nowrap}
+  .qs-t small{display:none}
+  .qs-n{width:26px;height:26px;font-size:13px}
+  .qs-step{gap:7px}
+  .qs-ctrl{width:100%;margin-left:0}
+  .qs-ctrl .qs-btn{flex:1}
+  .videobox{aspect-ratio:3/4;border-radius:24px;margin:0 -8px}
+  .statline{grid-template-columns:1fr 1fr;row-gap:14px}
+  .stat:nth-child(odd){border-left:0;padding-left:0}
+  .panel{padding:20px}
+  .modecard{padding:22px 20px}
+  .h-sec{margin:40px 0 16px}
+  .prose p{font-size:16px}
+  .prose blockquote{font-size:19px}
+  .spectrum{padding:20px 18px 16px;margin-left:-8px;margin-right:-8px}
+  .sp-pt span{font-size:12px}
+  .review-head .btn{width:100%}
+  .foot{flex-wrap:wrap;padding:24px 16px calc(96px + env(safe-area-inset-bottom,0px))}
+  .foot .for{margin-left:46px;text-align:left;flex-basis:100%}
+}
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{animation-duration:.01ms !important;transition-duration:.01ms !important}
+}
+
+/* ---------- second pass: poster stage, vertical title, softer rhythm ---------- */
+.hero{position:relative;padding:28px 0 8px}
+.hero .title.xl{max-width:14ch}
+.tate{position:absolute;right:6px;top:22px;display:flex;flex-direction:column;align-items:center;gap:16px;color:var(--ink)}
+.tate span{writing-mode:vertical-rl;font-size:clamp(26px,2.7vw,36px);font-weight:500;letter-spacing:.34em;line-height:1}
+.tate i{width:1px;height:64px;background:var(--shu)}
+.tate small{writing-mode:vertical-rl;font-size:12.5px;letter-spacing:.18em;color:var(--faint)}
+.view.active{animation:viewin .4s ease both}
+@keyframes viewin{from{opacity:0}to{opacity:1}}
+
+/* the stage as a poster: a vermilion sun behind the white figure */
+.stage{background:#0b0b0d}
+:root[data-theme="dark"] .stage{background:#060607}
+.stage::before{content:"";position:absolute;left:58%;top:43%;width:48%;aspect-ratio:1;transform:translate(-50%,-50%);border-radius:50%;
+  background:radial-gradient(circle at 38% 30%,#e24a31 0%,#c92a17 55%,#ab2112 100%)}
+.stage::after{content:"";position:absolute;inset:0;pointer-events:none;border-radius:inherit;box-shadow:inset 0 0 0 1px rgba(244,244,240,.07)}
+.stage .mode-tag{color:rgba(244,244,240,.72);font-size:13.5px}
+.dojo{box-shadow:0 40px 80px -40px rgba(18,18,20,.45)}
+.dojo-side{padding-top:38px}
+.seq .step .nm{font-size:21px}
+.seq .step{padding:17px 2px}
+
+/* quieter, more deliberate details */
+.title{font-weight:650}
+.lead{color:var(--muted)}
+.btn.primary{box-shadow:0 8px 20px -10px rgba(201,42,23,.7)}
+.proglevel,.chip{transition:box-shadow .18s,background .18s,transform .12s}
+.proglevel:active,.chip:active{transform:scale(.98)}
+.proglevel.on{background:var(--surface);box-shadow:inset 0 0 0 2px var(--ink),0 10px 24px -14px rgba(18,18,20,.35)}
+.trio{border-top:0;position:relative}
+.trio::before{content:"";position:absolute;left:0;top:0;width:40px;height:2px;background:var(--shu)}
+.trio h3{font-size:22px}
+.aside-note{border-left-color:#7fd08a}
+.modecard{transition:transform .25s ease,box-shadow .25s ease}
+@media (hover:hover){ .modecard:hover{transform:translateY(-3px);box-shadow:0 2px 4px rgba(18,18,20,.04),0 28px 48px -20px rgba(18,18,20,.22)} }
+.videobox .overlay{background:#0b0b0d}
+.videobox .overlay::before{content:"";position:absolute;left:50%;top:50%;width:min(46%,300px);aspect-ratio:1;transform:translate(-50%,-58%);border-radius:50%;
+  background:radial-gradient(circle at 38% 30%,#e24a31 0%,#c92a17 55%,#ab2112 100%);opacity:.9}
+.videobox .overlay > *{position:relative}
+.videobox .overlay .ic{background:rgba(11,11,13,.35);box-shadow:inset 0 0 0 1.5px rgba(244,244,240,.8);color:#f4f4f0}
+.videobox .overlay p{color:#e9e7e0}
+.foot{border-top:0;position:relative}
+.foot::before{content:"";position:absolute;left:32px;right:32px;top:0;height:1px;background:var(--line)}
+@media (max-width:1020px){ .tate{display:none} .hero .title.xl{max-width:none} }
+
+/* ============================================================
+   Third pass: Japandi. Linen, warm charcoal, pale straw.
+   The seal is the only red. No sun.
+   ============================================================ */
+:root{
+  --bg:#f4f1eb; --surface:#fbf9f5; --surface2:#e9e4da; --ink:#23211e; --muted:#5c5852; --faint:#6e6961;
+  --line:rgba(35,33,30,.12); --line-strong:rgba(35,33,30,.3);
+  --shu:#b5391f; --shu-ink:#a3321a; --good:#2a6e42; --bad:#a3321a; --busy:#7d5407;
+  --shadow:none; --sumi:#24221f;
+  --st-wall:#e7e1d5; --st-fig:#262421; --st-far:#7b766d; --st-line:#262421; --st-floor:#d9cdae; --st-text:#5c5852; --st-elbow:#2a6e42; --st-shadow:rgba(35,33,30,.24);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#1a1917; --surface:#23211e; --surface2:#2e2b27; --ink:#f1ede4; --muted:#b8b2a7; --faint:#9a948a;
+    --line:rgba(241,237,228,.13); --line-strong:rgba(241,237,228,.32);
+    --shu-ink:#f08a70; --good:#86cf9b; --bad:#f08a70; --busy:#e8bd6a; --sumi:#121110;
+    --st-wall:#2a2825; --st-fig:#f1ede4; --st-far:#a59f94; --st-line:#f1ede4; --st-floor:#39352d; --st-text:#b8b2a7; --st-elbow:#86cf9b; --st-shadow:rgba(0,0,0,.45);
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#1a1917; --surface:#23211e; --surface2:#2e2b27; --ink:#f1ede4; --muted:#b8b2a7; --faint:#9a948a;
+  --line:rgba(241,237,228,.13); --line-strong:rgba(241,237,228,.32);
+  --shu-ink:#f08a70; --good:#86cf9b; --bad:#f08a70; --busy:#e8bd6a; --sumi:#121110;
+  --st-wall:#2a2825; --st-fig:#f1ede4; --st-far:#a59f94; --st-line:#f1ede4; --st-floor:#39352d; --st-text:#b8b2a7; --st-elbow:#86cf9b; --st-shadow:rgba(0,0,0,.45);
+}
+.sumi{
+  --surface:#2e2b27; --surface2:#3a3632; --ink:#f1ede4; --muted:#b8b2a7; --faint:#9a948a;
+  --line:rgba(241,237,228,.14); --line-strong:rgba(241,237,228,.34);
+  --shu-ink:#f08a70; --good:#86cf9b; --bad:#f08a70; --busy:#e8bd6a;
+}
+
+/* calmer type */
+.title{font-weight:500;letter-spacing:-.028em}
+.title.xl{font-size:clamp(40px,6.4vw,76px);letter-spacing:-.04em;line-height:1.02}
+.h-sm,.h-sec,.trio h3,.modecard .mt,.prose h2{font-weight:550}
+.lead{max-width:56ch}
+.hero{padding-top:40px}
+.cta{margin-top:36px}
+
+/* buttons: charcoal, not red */
+.btn{font-weight:550}
+.btn.primary{background:var(--ink);color:var(--bg);box-shadow:none}
+.btn.primary:hover{filter:none;opacity:.88}
+input[type=range]{accent-color:var(--ink)}
+.check input{accent-color:var(--ink)}
+#recBtn.rec{background:var(--shu);color:#fff}
+.seg button.on,.qs-delay button.on{box-shadow:0 1px 2px rgba(35,33,30,.16)}
+.sumi .seg button.on,:root[data-theme="dark"] .seg button.on,:root[data-theme="dark"] .qs-delay button.on{background:#48443e}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]) .seg button.on,:root:not([data-theme="light"]) .qs-delay button.on{background:#48443e} }
+
+/* the stage: a quiet room, pale wall, straw mat */
+.dojo{background:var(--surface);box-shadow:inset 0 0 0 1px var(--line);margin-top:64px}
+.dojo-stage{padding:12px 12px 22px}
+.stage,:root[data-theme="dark"] .stage{background:var(--st-wall)}
+.stage::before,.videobox .overlay::before{display:none}
+.stage::after{box-shadow:none}
+.stage .mode-tag{color:var(--st-text)}
+.seq .step .ord{color:var(--ink);box-shadow:inset 0 0 0 2px var(--bp)}
+.seq .step.fired .ord{color:#1c1b19}
+.seq .step.protected{--bp:var(--good)}
+.seq .step.protected .ord{border-color:var(--good)}
+.seq .step.protected .hz{color:var(--good)}
+.seq .step.err .ord{box-shadow:inset 0 0 0 2px var(--bad);color:var(--bad)}
+.seq .step .nm{font-weight:550}
+
+/* surfaces: hairlines instead of shadows */
+.card{box-shadow:inset 0 0 0 1px var(--line);border:0 !important}
+.proglevel.on{box-shadow:inset 0 0 0 1.5px var(--ink)}
+.proglevel .diff i.f{background:var(--ink)}
+@media (hover:hover){ .modecard:hover{transform:none;box-shadow:inset 0 0 0 1px var(--line-strong)} }
+.modecard .num{background:none;color:var(--ink);box-shadow:inset 0 0 0 1.5px var(--ink)}
+.bp-btn{background:var(--sumi);color:#f1ede4}
+:root[data-theme="dark"] .bp-btn{background:#3a3632}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]) .bp-btn{background:#3a3632} }
+.aside-note{border-left-color:var(--good)}
+.trio::before{width:28px;height:1.5px}
+.videobox .overlay{background:var(--sumi)}
+.videobox .overlay .ic{background:none;box-shadow:inset 0 0 0 1.5px var(--line-strong)}
+.videobox .overlay p{color:var(--muted)}
+.plot-tip{background:rgba(58,54,50,.96)}
+.sp-pt.core b{color:#1c1b19}
+.tate i{height:48px}
+.foot p{line-height:1.5}
+
+.hero .title.xl{max-width:none}
+
+/* ============================================================
+   The vertical title: mincho, a thin vermilion rule, spaced latin.
+   Used on the opening screen, on every page, in the brand and
+   in the signature.
+   ============================================================ */
+.prose h3{font-size:20px;font-weight:550;margin:36px 0 12px;letter-spacing:-.015em}
+.view{position:relative}
+.tate{position:absolute;right:32px;top:72px;display:flex;flex-direction:column;align-items:center;gap:18px;color:var(--ink)}
+.tate span{writing-mode:vertical-rl;font-family:var(--jp);font-size:clamp(26px,2.7vw,36px);font-weight:500;letter-spacing:.34em;line-height:1}
+.tate i{display:block;width:1px;height:52px;background:var(--shu)}
+.tate small{writing-mode:vertical-rl;font-size:12.5px;letter-spacing:.24em;color:var(--faint)}
+.hero{position:static}
+.view > .title,.view > .lead,.hero{padding-right:90px}
+
+/* opening screen */
+#splash .tate{position:static;gap:22px;animation:tate-in 1.1s ease both}
+#splash .tate span{font-size:clamp(40px,7vw,56px)}
+#splash .tate i{height:72px;transform-origin:top;animation:rule-in .7s .35s cubic-bezier(.3,.7,.2,1) both}
+#splash .tate small{font-size:13.5px;letter-spacing:.3em;color:var(--muted);animation:tate-in .8s .7s ease both}
+#splash .tate small.by{color:var(--faint);font-size:12px;margin-top:6px;animation-delay:.95s}
+@keyframes tate-in{from{opacity:0}to{opacity:1}}
+@keyframes rule-in{from{transform:scaleY(0)}to{transform:scaleY(1)}}
+
+/* brand and signature, same voice laid flat */
+.brand{gap:12px}
+.brand .rule,.foot .rule{display:block;width:1px;height:18px;background:var(--shu);flex:none}
+.brand .name{font-size:12.5px;font-weight:500;letter-spacing:.2em;color:var(--ink)}
+.foot .rule{height:34px}
+.foot .sig{font-weight:500;letter-spacing:.2em;font-size:12.5px;color:var(--ink)}
+.foot p{line-height:1.6}
+
+@media (max-width:1020px){
+  /* laid flat above the title when there is no room for a column */
+  .tate{display:flex;position:static;flex-direction:row;gap:12px;margin-bottom:18px}
+  .tate span{writing-mode:horizontal-tb;font-size:20px;letter-spacing:.2em}
+  .tate i{width:32px;height:1px}
+  .tate small{writing-mode:horizontal-tb;letter-spacing:.2em}
+  #splash .tate{flex-direction:column}
+  #splash .tate span,#splash .tate small{writing-mode:vertical-rl}
+  #splash .tate span{font-size:44px;letter-spacing:.34em}
+  #splash .tate i{width:1px;height:64px}
+  .view > .title,.view > .lead,.hero{padding-right:0}
+  .brand .name{display:block}
+}
+@media (max-width:720px){ .brand .name{letter-spacing:.16em;font-size:12px} }
+
+/* ============================================================
+   One voice for every small label: lowercase, widely spaced,
+   with the thin vermilion rule where a section begins.
+   ============================================================ */
+.navlink,.h-sm,.h-sec,.side-h,.field label,.flabel,.stat .k,.kvtable thead th,.qsec,.proglevel .lv,.modecard .kind,.facts dt,
+.stage .mode-tag,.foot p,.foot .sig,.qs-delay .lbl,.sp-axis small,.sp-key,.figcap,.just summary,.cites,.videobox .hud{
+  text-transform:lowercase;letter-spacing:.16em;font-weight:500;
+}
+.navlink{font-size:12.5px;letter-spacing:.16em;gap:9px}
+.navlink .kj{letter-spacing:0;font-size:14px}
+.h-sm,.side-h{font-size:12.5px;color:var(--ink);display:flex;align-items:center;gap:12px}
+.h-sm::before,.side-h::before,.h-sec::before{content:"";width:22px;height:1px;background:var(--shu);flex:none}
+.h-sec{font-size:13px;display:flex;align-items:center;gap:14px;margin:64px 0 24px}
+.h-sec::before{width:36px}
+.pickers .h-sm{margin-bottom:18px}
+.side-h{margin-bottom:12px;color:var(--ink)}
+.panel > .h-sm,.review-head .h-sm{margin-bottom:4px}
+.advpanel summary .h-sm{margin:0}
+.field label,.flabel{font-size:11.5px;color:var(--faint)}
+.field label span{letter-spacing:.08em}
+.stat .k{font-size:11px;color:var(--faint)}
+.kvtable thead th{font-size:11px}
+.qsec{font-size:12.5px;color:var(--ink)}
+.proglevel .lv{font-size:11px;letter-spacing:.16em}
+.modecard .kind{font-size:11.5px;margin-top:7px}
+.facts dt{font-size:11px;padding-top:3px}
+.facts div{grid-template-columns:92px 1fr}
+.stage .mode-tag{font-size:11.5px}
+.qs-delay .lbl{font-size:11px}
+.sp-axis small{font-size:11px;margin-top:3px}
+.sp-key{font-size:11px}
+.figcap{font-size:11.5px !important;line-height:1.7}
+.just summary{font-size:12px}
+.cites{font-size:11.5px;letter-spacing:.06em;text-transform:none}
+.videobox .hud{font-size:11px;letter-spacing:.08em}
+.qs-t small{letter-spacing:.14em;text-transform:lowercase;font-size:11px}
+.seq .step .hz{letter-spacing:.14em;text-transform:lowercase;font-size:11px}
+.proglevel .jp,.seq .step .nm small{letter-spacing:.1em}
+
+/* headings: lighter, so the spaced labels and the mincho carry the tone */
+.title{font-weight:450}
+.trio h3,.modecard .mt,.prose h2,.videobox .overlay h3{font-weight:500}
+.prose h2{position:relative;padding-top:26px}
+.prose h2::before{content:"";position:absolute;left:0;top:0;width:36px;height:1px;background:var(--shu)}
+
+/* signature */
+.foot{align-items:center;gap:18px}
+.foot p{font-size:11.5px;line-height:2;color:var(--faint)}
+.foot .sig{font-size:11.5px;color:var(--ink)}
+.foot .rule{height:52px}
+.foot .for{color:var(--faint)}
+@media (max-width:720px){
+  .navlink{font-size:9.5px;letter-spacing:.1em;gap:3px}
+  .navlink .kj{font-size:19px}
+  .foot p{font-size:11px;letter-spacing:.14em}
+  .foot .for{margin-left:66px}
+  .facts div{grid-template-columns:84px 1fr}
+}
+
+/* the mark: ink on linen, a thin circle around the character. No red. */
+.seal{color:var(--ink)}
+.brand .seal{width:30px;height:30px}
+.foot .seal{width:34px;height:34px}
+
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <symbol id="seal" viewBox="0 0 100 100">
+    <circle cx="50" cy="50" r="47" fill="none" stroke="currentColor" stroke-width="2.6"/>
+    <path fill="currentColor" transform="translate(50 50.5) scale(.054 -.054) translate(-510 -379)" d="M208 693 197 686C230 650 266 589 273 541C336 489 397 621 208 693ZM432 712 421 706C450 666 482 600 483 547C543 492 611 624 432 712ZM781 837C627 794 335 742 103 721L107 701C346 709 619 739 801 769C826 757 844 757 854 766ZM751 725C726 662 684 578 643 519H171C168 534 164 550 158 567H141C148 503 116 444 78 424C57 412 43 392 52 370C63 347 97 347 122 363C152 381 178 425 174 490H852C839 455 820 410 806 382L817 374C855 401 906 445 934 478C954 479 964 481 972 488L894 563L851 519H671C725 566 782 626 818 673C839 671 852 679 856 691ZM685 330C644 257 587 193 516 138C434 188 367 252 322 330ZM172 359 180 330H298C339 239 397 165 470 105C357 30 216 -25 54 -61L60 -78C243 -51 394 -1 514 71C618 -1 747 -49 892 -79C902 -44 925 -22 957 -16L959 -5C816 15 682 51 570 108C651 166 716 236 766 318C792 319 803 322 811 331L738 402L688 359Z"/>
+  </symbol>
+</svg>
+
+<div id="splash" aria-hidden="true"><div class="tate"><span lang="ja">受け身</span><i></i><small>ukemi sound trainer</small><small class="by">eirini liapikou</small></div></div>
+
+<header class="topbar">
+  <div class="brand">
+    <svg class="seal" role="img" aria-label="Ukemi mark"><use href="#seal"/></svg>
+    <i class="rule" aria-hidden="true"></i><span class="name">ukemi sound trainer</span>
+  </div>
+  <nav class="tabs" aria-label="Sections">
+    <button type="button" class="navlink active" data-view="demo" aria-current="page"><span class="kj" lang="ja" aria-hidden="true">型</span>Watch</button>
+    <button type="button" class="navlink" data-view="trainer"><span class="kj" lang="ja" aria-hidden="true">稽古</span>Train</button>
+    <button type="button" class="navlink" data-view="modes"><span class="kj" lang="ja" aria-hidden="true">音</span>Sounds</button>
+    <button type="button" class="navlink" data-view="science"><span class="kj" lang="ja" aria-hidden="true">学</span>Science</button>
+    <button type="button" class="navlink" data-view="research"><span class="kj" lang="ja" aria-hidden="true">記</span>Research</button>
+  </nav>
+  <button type="button" class="iconbtn" id="themeBtn" aria-label="Switch appearance"><span class="moon" aria-hidden="true"></span></button>
+</header>
+
+<main class="main">
+  <!-- ============ WATCH ============ -->
+  <section class="view active" id="view-demo">
+    <div class="tate" aria-hidden="true"><span lang="ja">後ろ受け身</span><i></i><small>ushiro ukemi</small></div>
+    <div class="hero">
+      <h1 class="title xl">Hear the fall.<br>Learn the technique.</h1>
+      <p class="lead">In a backward breakfall the hips land first, the hands slap the mat, and the rounded back rolls down a split second later. It is over in about half a second, too fast to watch yourself do it. This trainer gives each landing its own sound, so you can hear whether the order and the timing were right.</p>
+      <div class="cta">
+        <button type="button" class="btn primary lg" data-goto="trainer">Train with your camera</button>
+        <button type="button" class="btn lg" id="heroPlay">Play a fall</button>
+      </div>
+    </div>
+
+    <div class="dojo" id="dojo">
+      <div class="dojo-stage">
+        <div class="stage">
+          <canvas id="judoka" role="img" aria-label="Animated side view of a judoka performing the backward breakfall"></canvas>
+          <div class="mode-tag" id="stageTag"><span id="stageTagTxt">Distinct Timbral Contact Sounds</span></div>
+        </div>
+        <div class="controls">
+          <button type="button" class="btn primary" id="playBtn"><span class="tri" aria-hidden="true"></span>Play</button>
+          <button type="button" class="btn ghost" id="resetBtn">Reset</button>
+          <div class="seg" id="speedSeg" role="group" aria-label="Playback speed">
+            <button type="button" data-s="4.0" aria-pressed="false">Slow</button>
+            <button type="button" data-s="2.4" class="on" aria-pressed="true">Normal</button>
+            <button type="button" data-s="0.6" aria-pressed="false">Real time</button>
+          </div>
+          <button type="button" class="btn ghost warn" id="errBtn">Head alarm</button>
+        </div>
+      </div>
+      <aside class="dojo-side">
+        <h2 class="side-h">Landing order</h2>
+        <div class="seq" id="seqTrack"></div>
+        <div class="field force">
+          <label for="intenSlider">Landing force <span id="intenVal">medium</span></label>
+          <input type="range" id="intenSlider" min="0.12" max="1" step="0.01" value="0.4">
+          <p class="note">Only Mode 5, Impact, reacts to this. A soft landing sounds clean and a hard one sounds harsh.</p>
+        </div>
+      </aside>
+    </div>
+
+    <div class="pickers">
+      <div>
+        <h2 class="h-sm">Level</h2>
+        <div class="proglevels" id="progLevels"></div>
+        <p class="note wide" id="progNote"></p>
+      </div>
+      <div>
+        <h2 class="h-sm">Sound</h2>
+        <div class="modechips" id="demoChips"></div>
+        <p class="note wide" id="modeNote"></p>
+      </div>
+    </div>
+
+    <p class="aside-note"><b>About the elbow.</b> The dashed green ring follows the elbow so you can check that it stays off the mat from start to finish. It is not a landing point: it neither strikes nor supports. The palms and forearms take the slap and the rounded back takes the roll. Technique validated by Dr. George Bountakis, PhD in sports science and judo expert.</p>
+
+    <div class="trio">
+      <div><h3>Nothing to wear</h3><p>The camera of a phone or a laptop is the only sensor. No markers, no straps, nothing to install.</p></div>
+      <div><h3>Seven sound designs</h3><p>From plain impact sounds that need no explanation to a chord that resolves when the fall is right. Pick the one that suits the learner.</p></div>
+      <div><h3>Stays on the device</h3><p>The video is analysed in the browser and never uploaded. After the first visit the trainer also works offline.</p></div>
+    </div>
+  </section>
+
+  <!-- ============ TRAIN ============ -->
+  <section class="view" id="view-trainer">
+    <div class="tate" aria-hidden="true"><span lang="ja">稽古</span><i></i><small>keiko</small></div>
+    <h1 class="title">Train with your camera</h1>
+    <p class="lead">Put the camera side-on to the mat at about hip height, far enough back that your whole body fits in the picture. Calibrate once lying down, then fall. Each landing plays its sound the moment that part of the body reaches the mat, and stays silent until you get up again.</p>
+
+    <div class="quickstart" id="quickstart">
+      <ol class="qs-steps">
+        <li class="qs-step on" id="qs1"><span class="qs-n">1</span><span class="qs-t"><b>Start</b><small>camera on</small></span></li>
+        <li class="qs-step" id="qs2"><span class="qs-n">2</span><span class="qs-t"><b>Lie down</b><small>calibrate the mat line</small></span></li>
+        <li class="qs-step" id="qs3"><span class="qs-n">3</span><span class="qs-t"><b>Fall</b><small>and listen</small></span></li>
+      </ol>
+      <div class="qs-ctrl">
+        <div class="qs-delay" id="qsDelay" role="group" aria-label="Countdown before calibration" hidden><span class="lbl">Countdown</span><button type="button" data-d="0">none</button><button type="button" data-d="5">5 s</button><button type="button" data-d="10">10 s</button><button type="button" data-d="20">20 s</button></div>
+        <button type="button" class="btn primary qs-btn" id="qsBtn">Start camera</button>
+        <button type="button" class="btn ghost" id="qsStop" hidden>Stop</button>
+      </div>
+    </div>
+
+    <div class="trainer">
+      <div>
+        <div class="videobox sumi">
+          <video id="vid" playsinline muted></video>
+          <canvas id="poseCv"></canvas>
+          <div class="hud" id="trHud" role="status">Camera off</div>
+          <div class="overlay" id="trainOverlay">
+            <div class="ic"><span class="tri"></span></div><h3>Ready when you are</h3>
+            <p>Start the camera and allow access when the browser asks. Nothing is recorded or uploaded.</p>
+          </div>
+        </div>
+        <div class="statline">
+          <div class="stat"><div class="k">Sound</div><div class="v sm" id="trMode">Timbral</div></div>
+          <div class="stat"><div class="k">Last landing</div><div class="v sm" id="trLast">–</div></div>
+          <div class="stat"><div class="k">Sequence</div><div class="v sm" id="trSeq">Ready</div></div>
+          <div class="stat"><div class="k">Elbow touches</div><div class="v" id="trElbow">0</div></div>
+        </div>
+      </div>
+
+      <div>
+        <details class="panel card advpanel" id="advPanel" open>
+          <summary><h2 class="h-sm">Settings</h2></summary>
+          <div class="field">
+            <span class="flabel" id="lblProg">Level</span>
+            <div class="proglevels compact" id="trProg" role="group" aria-labelledby="lblProg"></div>
+            <p class="note" id="trProgNote"></p>
+          </div>
+          <div class="field">
+            <span class="flabel" id="lblMode">Sound</span>
+            <div class="modechips" id="trChips" role="group" aria-labelledby="lblMode"></div>
+          </div>
+          <div class="field">
+            <span class="flabel" id="lblModel">Tracking model</span>
+            <div class="seg full" id="modelSeg" role="group" aria-labelledby="lblModel">
+              <button type="button" data-m="auto">Auto</button>
+              <button type="button" data-m="heavy">Precise</button>
+              <button type="button" data-m="full">Balanced</button>
+              <button type="button" data-m="lite">Fast</button>
+            </div>
+            <p class="note" id="modelNote"></p>
+            <p class="note">Precise follows a rolling or lying body best and needs a recent computer. Auto starts with Precise on computers and Balanced on phones, and steps down by itself if the device cannot keep up.</p>
+          </div>
+          <div class="field">
+            <span class="flabel">Mat line</span>
+            <button type="button" class="btn" id="calibBtn" style="width:100%">Calibrate</button>
+            <p class="note" id="calibNote">Not calibrated yet, so no sounds will play. Press Calibrate, lie flat on your back across the picture and stay still when the voice says so. The line is fitted through your hips and shoulders and placed just above your body. It follows a tilted camera.</p>
+          </div>
+          <div class="field">
+            <label for="thSlider">Adjust the line by hand <span id="thVal">0.800</span></label>
+            <input type="range" id="thSlider" min="0.4" max="0.97" step="0.005" value="0.80">
+          </div>
+          <div class="field" id="camField" hidden><label for="camSel">Camera</label><select id="camSel" class="sel"></select></div>
+          <label class="check"><input type="checkbox" id="mirChk" checked><span>Mirror the picture. Turn this off for an external webcam filming from the side.</span></label>
+          <div class="row camrow">
+            <button type="button" class="btn" id="camStart">Start camera</button>
+            <button type="button" class="btn ghost" id="camStop">Stop</button>
+          </div>
+          <p class="note">On a computer, press C to calibrate and Esc to cancel. The head crossing the line always sounds the alarm. An elbow on the mat gives a soft caution.</p>
+        </details>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ SOUNDS ============ -->
+  <section class="view" id="view-modes">
+    <div class="tate" aria-hidden="true"><span lang="ja">音</span><i></i><small>oto</small></div>
+    <h1 class="title">Seven ways to hear a fall</h1>
+    <p class="lead">Every design plays the same three landings in its own way. The first three are the core set and the other four take the idea further. Press a body part on any card to hear it.</p>
+    <h2 class="h-sec">Core set</h2>
+    <div class="modegrid" id="studyModes"></div>
+    <h2 class="h-sec">Extensions</h2>
+    <div class="modegrid" id="extModes"></div>
+  </section>
+
+  <!-- ============ SCIENCE ============ -->
+  <section class="view" id="view-science">
+    <div class="tate" aria-hidden="true"><span lang="ja">学</span><i></i><small>gaku</small></div>
+    <h1 class="title">Why sound, and why these sounds</h1>
+    <div class="prose">
+      <p>Falls are the second leading cause of unintentional-injury death worldwide. In judo, <i>ukemi</i> (safe falling) trains the body to spread an impact over a fixed sequence of landings. The hard part for a teacher is that what matters is the <b>order and timing of those landings</b>. They happen within roughly 300 to 600&nbsp;ms, and the person falling cannot see them.</p>
+
+      <blockquote>"Auditory perception is particularly sensitive to temporal characteristics… perception of sound does not require the listener to be oriented in a particular direction."<cite>Kramer et&nbsp;al., 1999</cite></blockquote>
+
+      <p>Sound does not compete with what the eyes are doing during a fall, and hearing resolves onsets to within a few milliseconds. That is the case for sonification, defined as "the transformation of data relations into perceived relations in an acoustic signal."</p>
+
+      <h2>From analogic to symbolic</h2>
+      <p>Walker &amp; Nees (Handbook Ch.2) describe a range of auditory displays. At one end are <b>analogic</b> sounds that resemble what they stand for. At the other are <b>symbolic</b> ones, where the link is arbitrary and has to be learned. Where a design sits on that range predicts how fast a listener understands it without being told, and that is the main question for a trainer people should be able to pick up and use.</p>
+
+      <figure class="spectrum sumi" id="spectrum" aria-label="The seven sound designs placed between analogic and symbolic"></figure>
+      <p class="figcap">Placement is ordinal. It follows the reasoning given for each design on the Sounds page and is not a measurement.</p>
+
+      <div class="tablewrap">
+        <table class="kvtable" id="modeTable">
+          <thead><tr><th scope="col">Mode</th><th scope="col">Type</th><th scope="col">Meaning carried by</th><th scope="col">Made for</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+
+      <h2>What follows for teaching</h2>
+      <p>There is no single best sound. The seven designs sit at different points between analogic and symbolic, and each one tells the learner something different: which part landed, how hard it landed, or how the whole fall flowed. The choice depends on who is learning and on what the lesson is about.</p>
+
+      <h2>Sources</h2>
+      <ul class="reflist">
+        <li><b>Hermann, Hunt &amp; Neuhoff (eds.), 2011.</b> <i>The Sonification Handbook.</i> Logos Verlag, Berlin. Framework throughout: Ch.2 (Walker &amp; Nees), Ch.13 (Brazil &amp; Fernström, auditory icons), Ch.15 (Grond &amp; Berger, parameter mapping), Ch.16 (Hermann, model-based sonification).</li>
+        <li><b>Kramer et&nbsp;al., 1999.</b> Sonification report: status of the field and research agenda. Definition and the argument from temporal sensitivity.</li>
+        <li><b>Gaver, 1993.</b> What in the world do we hear? Ecological acoustics and everyday listening. Basis for the impact sounds and the tatami model.</li>
+        <li><b>Dyer et&nbsp;al., 2017.</b> Melodic sonification and motor learning. Melody over rhythm for movement.</li>
+        <li><b>Effenberg, 2005.</b> Movement sonification: effects on perception and action. Continuous coupling of movement and sound (Mode 6).</li>
+        <li><b>Kos &amp; Umek.</b> Biofeedback systems and concurrent augmented feedback. Cognitive load, and making audible what the body cannot sense.</li>
+        <li><b>Sigrist et&nbsp;al., 2013.</b> Augmented feedback in motor learning: a review. Concurrent feedback and impact intensity (Mode 5).</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ============ RESEARCH ============ -->
+  <section class="view" id="view-research">
+    <div class="tate" aria-hidden="true"><span lang="ja">記</span><i></i><small>ki</small></div>
+    <h1 class="title">Record a session</h1>
+    <p class="lead">Start a recording, let the participant practise in Watch or Train, fill in the questionnaire, then export. Everything is saved as CSV and JSON files on this device. There is no server and nothing is uploaded.</p>
+
+    <div class="trainer research">
+      <div>
+        <div class="panel card">
+          <h2 class="h-sm">Recording <span id="recDot" class="recdot"></span></h2>
+          <p class="sub">Logs every landing (body part, sound mode, level, time, intensity), completed sequences and head errors. With the camera running it also stores all 33 pose landmarks.</p>
+          <div class="field">
+            <label for="pid">Participant ID</label>
+            <input type="text" id="pid" class="txtin" spellcheck="false" autocomplete="off">
+            <p class="note">Use an anonymous code, never a name.</p>
+          </div>
+          <button type="button" class="btn primary" id="recBtn" style="width:100%">Start recording</button>
+          <div class="statline" id="recStats"></div>
+        </div>
+        <div class="panel card">
+          <h2 class="h-sm">Export</h2>
+          <p class="sub">JSON holds everything, including the pose data. CSV gives one table of events and one row of questionnaire answers, ready for R, SPSS or Python.</p>
+          <div class="row wrap">
+            <button type="button" class="btn" id="expCsv">Download CSV</button>
+            <button type="button" class="btn" id="expJson">Download JSON</button>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div class="panel card">
+          <h2 class="h-sm">Participant questionnaire</h2>
+          <p class="sub">Fill this in after the participant has tried the trainer. The answers go into both exports.</p>
+          <div id="qForm"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel card review">
+      <div class="review-head">
+        <div>
+          <h2 class="h-sm">Session review</h2>
+          <p class="sub">See the recording before you export it. The curves show how high each landing point was above the mat line, and the rows below mark every landing in time. A completed sequence is boxed.</p>
+        </div>
+        <button type="button" class="btn" id="reviewBtn">Plot this session</button>
+      </div>
+      <p class="note" id="plotEmpty" hidden></p>
+      <div class="plot sumi" id="plot" hidden>
+        <canvas id="plotCv" class="plotcv" role="img" aria-label="Chart of the recorded session: height of each landing point over time, with landings marked per body part"></canvas>
+        <div class="plot-tip" id="plotTip" hidden></div>
+      </div>
+      <ul class="plot-legend" id="plotLegend" hidden>
+        <li><span class="lgk dotm"></span>landing</li>
+        <li><span class="lgk box"></span>completed sequence</li>
+        <li><span class="lgk cross"></span>head touched the mat</li>
+        <li><span class="lgk ring"></span>elbow touched the mat</li>
+      </ul>
+      <div id="assess"></div>
+    </div>
+  </section>
+
+  <footer class="foot">
+    <svg class="seal" aria-hidden="true"><use href="#seal"/></svg>
+    <i class="rule" aria-hidden="true"></i><p><b class="sig">eirini liapikou</b><br>Sound and Music Computing<br>Aalborg University Copenhagen</p>
+    <p class="for">Prepared for Tokai University</p>
+  </footer>
+</main>
+
+<script>
+/* ============================================================
+   modes-data.js — body parts, sound designs and their rationale
+   Landing order used everywhere in the app: hips → slap → back.
+   Citations: Hermann, Hunt & Neuhoff (eds.) The Sonification
+   Handbook (2011), plus thesis sources.
+   ============================================================ */
+window.PARTS = [
+  { id:'hips',      label:'Hips', jp:'腰', order:1, color:'#5bb8e8' },   // asagi blue
+  { id:'wrists',    label:'Slap', jp:'手', order:2, color:'#f2b84b' },   // yamabuki gold
+  { id:'shoulders', label:'Back', jp:'背', order:3, color:'#b79cf0' },   // fuji violet
+];
+window.PART_COLOR = Object.fromEntries(window.PARTS.map(p=>[p.id,p.color]));
+window.PART_COLOR.head = '#ff5a4a';
+window.PART_COLOR.elbows = '#7fd08a';
+window.PART_LABEL = { hips:'Hips', wrists:'Slap', shoulders:'Back', elbows:'Elbow', head:'Head' };
+
+window.MODES = [
+  {
+    id:'m1_piano', n:1, group:'study',
+    title:'Discrete Melodic', short:'Melodic',
+    kind:'Parameter mapping, melodic',
+    blurb:'Every landing plays a piano note, one step higher each time: C for the hips, D for the slap, E for the back. A good fall is a short rising phrase. A fall in the wrong order sounds like a wrong tune.',
+    map:['hips → C4','slap → D4','back → E4','head → alarm'],
+    just:`This is discrete <b>parameter-mapping sonification</b>: where a landing sits in the sequence decides where its note sits in the scale. The hips are lowest and land first, so they get the lowest note. Listeners expect pitch to follow height, and a mapping that goes against that expectation measurably hurts performance. A melody is also heard as one shape, so a learner can judge the whole fall without checking each note.`,
+    cites:['Grond & Berger, Handbook Ch.15 (PMSon)','Walker & Nees, Handbook Ch.2','Dyer et al. 2017 (melody > rhythm)'],
+    limit:'Hearing three notes as one rising phrase takes some musical exposure.',
+    best:'Learners with musical training',
+    spectrum:0.86, carried:'Pitch steps', music:'Helpful',
+  },
+  {
+    id:'m2_sweep', n:2, group:'study',
+    title:'Continuous Sweep', short:'Sweep',
+    kind:'Continuous parameter mapping',
+    blurb:'Every landing sets off a short upward glide. Each glide starts where the previous one stopped, so the three landings join into one rising sweep across the fall.',
+    map:['hips 120→220 Hz','slap 220→380 Hz','back 380→560 Hz'],
+    just:`Added after a practitioner said that separate notes felt like "checkpoints that don't follow the movement." A rising glide carries the direction and momentum of the fall, and the ear groups the three glides into one stream (Bregman's auditory scene analysis). A late or missing landing shows up as a gap in that stream. Only the direction of the pitch matters, so no musical knowledge is needed.`,
+    cites:['Walker & Nees, Handbook Ch.2','Bregman, Auditory Scene Analysis','Practitioner consult (Boukouvala)'],
+    limit:'Tells the body parts apart less clearly than timbre does, and works best when the whole sweep is heard.',
+    best:'All practitioners',
+    spectrum:0.62, carried:'Rising direction', music:'No',
+  },
+  {
+    id:'m3_timbral', n:3, group:'study',
+    title:'Distinct Timbral Contact Sounds', short:'Timbral',
+    kind:'Timbral mapping, ecological',
+    blurb:'Each body part has its own sound, modelled on the real impact: a low thud for the hips, a bright slap for the palms and forearms, a soft thump as the back rolls down.',
+    map:['hips → low thud','slap → bell','back → thump','head → alarm'],
+    just:`The sounds resemble what each landing sounds like on a real mat, so people recognise them the way they recognise everyday sounds, with almost nothing to learn. That matters for older adults in three ways. Telling timbres apart needs no pitch discrimination, and the energy sits between 110 and 1760 Hz and in the onsets, which age-related hearing loss affects least. There is little to memorise, so attention stays on the movement. And two different timbres are harder to mix up than two neighbouring notes.`,
+    cites:['Brazil & Fernström, Handbook Ch.13 (Auditory Icons)','Gaver, ecological listening','Kos & Umek (cognitive load)'],
+    limit:'Says which part landed. It does not say how hard, or how the fall flowed.',
+    best:'Older adults and beginners',
+    spectrum:0.2, carried:'Timbre of the impact', music:'No',
+  },
+  {
+    id:'m4_mbson', n:4, group:'extension',
+    title:'The Singing Tatami', short:'Singing Tatami',
+    kind:'Model-based sonification',
+    blurb:'The mat is treated as one resonant surface. Each landing strikes it at a different spot and with a different stiffness, so the same tatami rings differently for the hips, the hands and the back.',
+    map:['resonances at 92, 184, 300, 520, 820 Hz','strike point set by body part','damping set by body part'],
+    just:`A <b>model-based sonification</b> in Hermann's sense. Nothing is mapped to a sound parameter directly. The learner strikes a virtual object and hears how its physics respond. The mat has a set of resonances and each body part excites them differently, so which resonances ring and how fast they die away tells you what landed. That is how we recognise real struck objects. All three landings come from one object, which takes the everyday-listening idea of Mode 3 a step further.`,
+    cites:['Hermann, Handbook Ch.16 (Model-Based Sonification)','Gaver, everyday listening','Rocchesso & Fontana, The Sounding Object'],
+    limit:'Harder to synthesise and tune. Every landing shares one resonant body, so the parts contrast a little less than in Mode 3.',
+    best:'Immersive practice, realistic sound',
+    spectrum:0.07, carried:'Physics of the mat', music:'No',
+  },
+  {
+    id:'m5_impact', n:5, group:'extension',
+    title:'Impact Intensity', short:'Impact',
+    kind:'Continuous parameter mapping, safety',
+    blurb:'The speed of each landing shapes its sound. A soft, spread-out landing is quiet and clean. A heavy one is loud, bright and harsh. The slap (te-ate) is the protective part of the technique, so this mode is built around it.',
+    map:['speed → loudness','speed → brightness','speed → noise in the attack'],
+    just:`Ukemi exists to <b>spread and absorb impact</b>. A system that reports only the order of landings leaves out the thing the technique is for. Here landing speed sets loudness, brightness and the amount of noise in the attack. The learner hears how the fall was performed as well as whether it was completed, which is the biofeedback idea of making audible what the body cannot sense by itself. Harshness grows with force, so the sound rewards the soft landing the technique teaches.`,
+    cites:['Grond & Berger, Handbook Ch.15 (PMSon)','Kos & Umek (biofeedback principle)','Sigrist et al. 2013 (concurrent feedback)'],
+    limit:'Depends on a good speed estimate from the camera, which is noisier than a simple yes-or-no contact.',
+    best:'Refining technique and controlling impact',
+    spectrum:0.33, carried:'Force of the landing', music:'No',
+  },
+  {
+    id:'m6_descent', n:6, group:'extension',
+    title:'Falling Tone', short:'Falling Tone',
+    kind:'Continuous movement sonification',
+    blurb:'One tone follows the body all the way down. Its pitch drops as the centre of mass drops, and it moves left or right with the body. Each landing adds a short accent on top.',
+    map:['height of centre of mass → pitch','sideways position → stereo pan','landings → accents'],
+    just:`The whole path of the centre of mass becomes one continuous tone, with no cutting of the fall into events. It answers the practitioner who wanted sound that is "part of the fall itself." It also uses something a screen cannot offer: sound reaches you whichever way you are facing, and a person in the middle of a fall cannot look at a display. Coupling sound continuously to movement has been shown to help people perceive and reproduce whole-body movements.`,
+    cites:['Walker & Nees, Handbook Ch.2 (orientation-independence)','Effenberg 2005 (movement sonification)','Practitioner consult (continuity)'],
+    limit:'A constant tone can tire the ear, and it can cover the accents if the levels are not balanced.',
+    best:'Momentum, timing and flow',
+    spectrum:0.47, carried:'Height of the body', music:'No',
+  },
+  {
+    id:'m7_harmony', n:7, group:'extension',
+    title:'Resolving Chord', short:'Resolving Chord',
+    kind:'Harmonic parameter mapping',
+    blurb:'Each landing adds a note to a chord. Land in the right order and the chord resolves. A wrong order or a head contact leaves it tense and unfinished.',
+    map:['hips → root','slap → 3rd','back → 5th','complete → resolve'],
+    just:`Progress through the sequence is mapped to musical tension and release, and only the correct order completes the chord. This adds a motivating layer to the informative ones. Older adults often prefer feedback that sounds right over feedback that sounds like an alarm, and a pleasant resolution makes people more willing to keep practising.`,
+    cites:['Grond & Berger, Handbook Ch.15 (PMSon)','Vickers & Hogg (aesthetics & comprehension)','Emotional safety &amp; affective reinforcement'],
+    limit:'The most symbolic design of the seven. The harmonic logic has to be learned, and like Mode 1 it favours musical listeners.',
+    best:'Motivation and confidence, comfort for older adults',
+    spectrum:0.95, carried:'Harmonic tension', music:'Helpful',
+  },
+];
+window.MODE_BY_ID = Object.fromEntries(window.MODES.map(m=>[m.id,m]));
+
+
+</script>
+<script>
+/* ============================================================
+   audio-engine.js — Web Audio synthesis for all 7 modes
+   No samples, no install: everything is synthesised live.
+   ============================================================ */
+const Sono = (() => {
+  let ctx, master, room, roomGain, comp, ready=false;
+  let activeMode = 'm3_timbral';
+  const C = { C4:261.63, D4:293.66, E4:329.63, F4:349.23, G4:392.00, B4:493.88 };
+
+  function init(){
+    if(ready) return;
+    ctx = new (window.AudioContext||window.webkitAudioContext)({latencyHint:'interactive'});
+    master = ctx.createGain(); master.gain.value = 0.9;
+    comp = ctx.createDynamicsCompressor();
+    comp.threshold.value=-14; comp.ratio.value=3; comp.attack.value=.003; comp.release.value=.25;
+    // small room reverb
+    room = ctx.createConvolver(); room.buffer = makeIR(1.1, 2.2);
+    roomGain = ctx.createGain(); roomGain.gain.value = 0.14;
+    master.connect(comp); comp.connect(ctx.destination);
+    room.connect(roomGain); roomGain.connect(comp);
+    ready=true;
+  }
+  function makeIR(dur, decay){
+    const n = ctx.sampleRate*dur, buf = ctx.createBuffer(2,n,ctx.sampleRate);
+    for(let c=0;c<2;c++){ const d=buf.getChannelData(c);
+      for(let i=0;i<n;i++){ d[i]=(Math.random()*2-1)*Math.pow(1-i/n, decay); } }
+    return buf;
+  }
+  function resume(){ init(); if(ctx.state==='suspended') ctx.resume(); }
+  const t = ()=>ctx.currentTime;
+
+  // ---- generic decaying oscillator voice ----
+  function voice({type='sine', f0, f1, dur=0.5, attack=0.004, peak=0.5, dest, glide=dur*0.6, pan=0, curve='exp'}){
+    const o=ctx.createOscillator(); o.type=type;
+    const g=ctx.createGain();
+    const p=ctx.createStereoPanner(); p.pan.value=pan;
+    o.frequency.setValueAtTime(f0, t());
+    if(f1 && f1!==f0){ if(curve==='exp') o.frequency.exponentialRampToValueAtTime(Math.max(1,f1), t()+glide);
+      else o.frequency.linearRampToValueAtTime(f1, t()+glide); }
+    g.gain.setValueAtTime(0.0001, t());
+    g.gain.exponentialRampToValueAtTime(peak, t()+attack);
+    g.gain.exponentialRampToValueAtTime(0.0001, t()+dur);
+    o.connect(g); g.connect(p); p.connect(dest||master); p.connect(room);
+    o.start(); o.stop(t()+dur+0.05);
+    return {o,g,p};
+  }
+  function noise(dur){
+    const n=ctx.sampleRate*dur, b=ctx.createBuffer(1,n,ctx.sampleRate), d=b.getChannelData(0);
+    for(let i=0;i<n;i++) d[i]=Math.random()*2-1;
+    const s=ctx.createBufferSource(); s.buffer=b; return s;
+  }
+  function slap({level=0.5, cutoff=2200, dur=0.12, dest, pan=0}){
+    const s=noise(dur), bp=ctx.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=cutoff; bp.Q.value=0.8;
+    const g=ctx.createGain(); const p=ctx.createStereoPanner(); p.pan.value=pan;
+    g.gain.setValueAtTime(level, t()); g.gain.exponentialRampToValueAtTime(0.0001, t()+dur);
+    s.connect(bp); bp.connect(g); g.connect(p); p.connect(dest||master); p.connect(room);
+    s.start(); s.stop(t()+dur+0.02);
+  }
+
+  // ---------- ALARM (head / error) ----------
+  function alarm(dest){
+    for(let i=0;i<3;i++){
+      const o=ctx.createOscillator(), g=ctx.createGain(); o.type='sawtooth';
+      o.frequency.setValueAtTime(233, t()+i*0.12);
+      o.frequency.setValueAtTime(196, t()+i*0.12+0.05);
+      const ws=ctx.createWaveShaper(); ws.curve=distCurve(40);
+      g.gain.setValueAtTime(0.0001, t()+i*0.12);
+      g.gain.linearRampToValueAtTime(0.5, t()+i*0.12+0.01);
+      g.gain.exponentialRampToValueAtTime(0.0001, t()+i*0.12+0.1);
+      o.connect(ws); ws.connect(g); g.connect(dest||master);
+      o.start(t()+i*0.12); o.stop(t()+i*0.12+0.12);
+    }
+  }
+  function distCurve(k){ const n=256,c=new Float32Array(n); for(let i=0;i<n;i++){const x=i/n*2-1;c[i]=(1+k)*x/(1+k*Math.abs(x));} return c; }
+
+  // ---------- CAUTION (elbow — protected zone, softer than the alarm) ----------
+  function caution(){
+    resume();
+    for(let i=0;i<2;i++){
+      const o=ctx.createOscillator(), g=ctx.createGain(); o.type='triangle';
+      o.frequency.setValueAtTime(392, t()+i*0.14);
+      o.frequency.exponentialRampToValueAtTime(330, t()+i*0.14+0.1);
+      g.gain.setValueAtTime(0.0001, t()+i*0.14);
+      g.gain.linearRampToValueAtTime(0.22, t()+i*0.14+0.012);
+      g.gain.exponentialRampToValueAtTime(0.0001, t()+i*0.14+0.13);
+      o.connect(g); g.connect(master); g.connect(room);
+      o.start(t()+i*0.14); o.stop(t()+i*0.14+0.15);
+    }
+  }
+
+  // ============================================================
+  //  MODE SYNTHS
+  // ============================================================
+  const SCALE = { hips:C.C4, wrists:C.D4, shoulders:C.E4 };
+
+  // M1 piano
+  function piano(part,o={}){
+    if(part==='head') return alarm();
+    const f=SCALE[part]||C.C4, dest=ctx.createGain(); dest.gain.value=1; dest.connect(master);
+    const lp=ctx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=3200; lp.connect(master); lp.connect(room);
+    [[1,0.34,'triangle'],[2,0.12,'sine'],[3,0.05,'sine']].forEach(([h,a,ty])=>{
+      const v=voice({type:ty,f0:f*h,dur:0.95,attack:0.003,peak:a,dest:lp}); v.o.detune.value=(Math.random()*8-4);
+    });
+  }
+  // M2 sweep
+  const SWEEP={hips:[120,220],wrists:[220,380],shoulders:[380,560]};
+  function sweep(part,o={}){
+    if(part==='head') return alarm();
+    const [a,b]=SWEEP[part]||[120,220];
+    const lp=ctx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=Math.min(7000,b*4); lp.connect(master); lp.connect(room);
+    voice({type:'sawtooth',f0:a,f1:b,dur:0.32,glide:0.18,attack:0.006,peak:0.34,dest:lp,curve:'exp'});
+    voice({type:'sine',f0:a,f1:b,dur:0.3,glide:0.18,attack:0.006,peak:0.18,dest:lp});
+  }
+  // M3 timbral
+  function timbral(part,o={}){
+    if(part==='head') return alarm();
+    if(part==='hips'){ voice({type:'sine',f0:110,f1:55,dur:0.34,glide:0.22,peak:0.55}); slap({level:0.12,cutoff:160,dur:0.08}); }
+    else if(part==='elbows'){ voice({type:'triangle',f0:280,f1:140,dur:0.16,glide:0.1,peak:0.42}); slap({level:0.28,cutoff:1800,dur:0.05}); }
+    else if(part==='shoulders'){ voice({type:'sine',f0:440,f1:220,dur:0.24,glide:0.16,peak:0.4}); slap({level:0.1,cutoff:500,dur:0.07}); }
+    else if(part==='wrists'){ [880,1320,1760].forEach((f,i)=>voice({type:'sine',f0:f*(1+i*0.002),dur:0.6-i*0.08,peak:0.22-i*0.04})); slap({level:0.18,cutoff:3200,dur:0.04}); }
+  }
+  // M4 model-based — "singing tatami"
+  const MODEF=[92,184,300,520,820];
+  const MBSTRIKE={
+    hips:     {w:[1,.7,.35,.12,.05], dk:1.5, br:0},
+    elbows:   {w:[.3,.55,.95,.5,.2], dk:0.55, br:1},
+    shoulders:{w:[.5,.85,.55,.3,.15],dk:0.95, br:.4},
+    wrists:   {w:[.08,.25,.55,.9,1], dk:0.7, br:1.4},
+  };
+  function mbson(part,o={}){
+    if(part==='head') return alarm();
+    const s=MBSTRIKE[part]||MBSTRIKE.hips;
+    slap({level:0.14+0.06*s.br, cutoff:600+s.br*1600, dur:0.05}); // the strike excitation
+    MODEF.forEach((f,i)=>{ if(s.w[i]<0.04) return;
+      voice({type:'sine',f0:f,dur:(0.25+f/2000)*s.dk*1.6,peak:0.34*s.w[i],attack:0.002});
+    });
+  }
+  // M5 impact-intensity
+  const IMP_BASE={hips:90,elbows:150,shoulders:130,wrists:240};
+  function impact(part,o={}){
+    if(part==='head') return alarm();
+    const I=Math.max(0.05,Math.min(1,o.intensity??0.6));
+    const base=IMP_BASE[part]||120;
+    const lp=ctx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=400+I*I*6800;
+    const ws=ctx.createWaveShaper(); ws.curve=distCurve(I*22); lp.connect(ws); ws.connect(master); ws.connect(room);
+    voice({type:'sine',f0:base*1.4,f1:base*0.7,dur:0.1+0.22*I,glide:0.1,peak:0.2+0.5*I,dest:lp});
+    voice({type:'triangle',f0:base*2.2,f1:base,dur:0.06+0.12*I,glide:0.05,peak:0.18*I,dest:lp});
+    slap({level:0.55*I*I, cutoff:1200+I*4200, dur:0.04+0.05*I});
+  }
+  // M6 continuous descent (+ accents)
+  let fall=null;
+  function startFall(){ resume();
+    const o=ctx.createOscillator(); o.type='triangle';
+    const sub=ctx.createOscillator(); sub.type='sine';
+    const lp=ctx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=1400;
+    const g=ctx.createGain(); g.gain.value=0.0001;
+    const p=ctx.createStereoPanner();
+    o.connect(lp); sub.connect(lp); lp.connect(g); g.connect(p); p.connect(master); p.connect(room);
+    o.frequency.value=520; sub.frequency.value=260;
+    g.gain.linearRampToValueAtTime(0.22, t()+0.08);
+    o.start(); sub.start();
+    fall={o,sub,lp,g,p};
+  }
+  function updateFall(h, x=0){ if(!fall) return; // h:1 standing .. 0 floor
+    const f=70*Math.pow(7.4, h); // 70..520
+    fall.o.frequency.setTargetAtTime(f, t(), 0.05);
+    fall.sub.frequency.setTargetAtTime(f/2, t(), 0.05);
+    fall.lp.frequency.setTargetAtTime(500+h*2600, t(), 0.06);
+    fall.p.pan.setTargetAtTime(Math.max(-1,Math.min(1,x)), t(), 0.05);
+  }
+  function endFall(){ if(!fall) return; const f=fall;
+    f.g.gain.cancelScheduledValues(t()); f.g.gain.setTargetAtTime(0.0001, t(), 0.12);
+    f.o.stop(t()+0.6); f.sub.stop(t()+0.6); fall=null;
+  }
+  function descent(part,o={}){
+    if(part==='head') return alarm();
+    // discrete accent (used when no continuous fall is running, e.g. preview)
+    const col={hips:160,elbows:300,shoulders:430,wrists:680}[part]||300;
+    voice({type:'triangle',f0:col,f1:col*0.6,dur:0.22,glide:0.14,peak:0.3,pan:o.pan||0});
+    if(!fall){ voice({type:'sine',f0:col*1.5,f1:col*0.5,dur:0.5,glide:0.4,peak:0.12}); }
+  }
+  // M7 harmonic
+  const CHORD={hips:C.C4, wrists:C.E4, shoulders:C.G4};
+  function harmony(part,o={}){
+    if(part==='head'){ // tense unresolved cluster + alarm
+      [C.C4, C.C4*1.06, C.F4*1.4].forEach(f=>voice({type:'sine',f0:f,dur:0.9,peak:0.16}));
+      alarm(); return;
+    }
+    const f=CHORD[part]||C.C4;
+    voice({type:'sine',f0:f,dur:1.6,attack:0.02,peak:0.26});
+    voice({type:'triangle',f0:f*2,dur:1.2,attack:0.02,peak:0.06});
+  }
+  function resolveChord(correct){
+    resume();
+    if(correct){ [C.C4,C.E4,C.G4,C.C4*2].forEach((f,i)=>{
+      const v=voice({type:'sine',f0:f,dur:2.2,attack:0.06,peak:0.2}); v.g.gain.setValueAtTime(0.0001,t());
+      v.g.gain.linearRampToValueAtTime(0.2, t()+0.25); v.g.gain.exponentialRampToValueAtTime(0.0001,t()+2.2);
+    }); }
+    else { [C.C4,C.C4*1.06,C.G4*0.94,C.F4*1.42].forEach(f=>voice({type:'sine',f0:f,dur:1.4,peak:0.14})); }
+  }
+
+  const SYNTH={ m1_piano:piano, m2_sweep:sweep, m3_timbral:timbral, m4_mbson:mbson, m5_impact:impact, m6_descent:descent, m7_harmony:harmony };
+
+  // ---- public ----
+  function setMode(id){ activeMode=id; }
+  function getMode(){ return activeMode; }
+  function trigger(part,opts={}){ resume(); (SYNTH[activeMode]||timbral)(part,opts); }
+  function error(){ resume(); if(activeMode==='m7_harmony') return harmony('head'); alarm(); }
+  function preview(modeId,part,opts={}){ resume(); (SYNTH[modeId]||timbral)(part,opts); }
+
+  return { init,resume,setMode,getMode,trigger,error,caution,preview,
+           startFall,updateFall,endFall,resolveChord,
+           get ctx(){return ctx;} };
+})();
+window.Sono = Sono;
+
+</script>
+<script>
+/* ============================================================
+   skeleton.js — the animated judoka on the demo stage
+   Landing order: hips → slap (palms and forearms) → back.
+   The figure is drawn as a pictogram: white judogi, no face.
+   Rounded spine, chin tucked (the head never lands), arms
+   slap the mat a moment before the upper back arrives.
+   ============================================================ */
+(function(){
+  const FLOOR = 0.80;
+  const JOINTS=['foot','ankle','knee','hip','lspine','chest','neck','head','elbow','wrist'];
+  const CONTACT_JOINTS={hip:'hips',chest:'shoulders',elbow:'elbows',wrist:'wrists',head:'head'};
+  const smooth=x=>x*x*(3-2*x);
+
+  function nextFrame(cb){ let done=false;
+    const r=requestAnimationFrame(()=>{ if(done)return; done=true; clearTimeout(s); cb(); });
+    const s=setTimeout(()=>{ if(done)return; done=true; cancelAnimationFrame(r); cb(); },24);
+    return {r,s}; }
+  function cancelFrame(h){ if(!h)return; cancelAnimationFrame(h.r); clearTimeout(h.s); }
+
+  /* Shared landing phase, reused by the seated, squat and standing
+     levels so they finish the same way and differ only in how the
+     body enters the roll. Each pose is the moment its sound plays:
+       slap — hips down, back still rolling, arm already on the mat
+       back — upper back arrives a split second later
+     The head stays well above FLOOR (.80) in every pose. */
+  const L = {
+    slap:{foot:[.70,.63],ankle:[.645,.63],knee:[.58,.575],hip:[.49,.782],lspine:[.447,.765],chest:[.412,.735],neck:[.375,.70],head:[.338,.655],elbow:[.478,.778],wrist:[.582,.808]},
+    back:{foot:[.705,.68],ankle:[.648,.675],knee:[.582,.595],hip:[.49,.783],lspine:[.442,.778],chest:[.402,.775],neck:[.362,.755],head:[.317,.715],elbow:[.475,.80],wrist:[.585,.808]},
+    end: {foot:[.71,.71],ankle:[.65,.71],knee:[.585,.62],hip:[.49,.784],lspine:[.44,.779],chest:[.40,.776],neck:[.36,.756],head:[.315,.716],elbow:[.475,.802],wrist:[.585,.808]},
+  };
+
+  const PROGRESSIONS = [
+    { id:'supine', level:1, label:'Supine slap', jp:'寝ながら', dur:3.0,
+      expected:['wrists'],
+      desc:'Lying on your back with knees bent and chin tucked. Practise only the slap (te-ate): the arms open to about 45° from the body and the palms and forearms hit the mat. The elbow never lands. There is no height and no roll, so this is the safest place to learn the timing of the slap.',
+      kf:[
+        {t:0.00,contact:null,     p:{foot:[.70,.70],ankle:[.64,.71],knee:[.58,.60],hip:[.50,.785],lspine:[.44,.775],chest:[.40,.775],neck:[.36,.755],head:[.315,.715],elbow:[.47,.79],wrist:[.55,.78]}},
+        {t:0.34,contact:null,     p:{foot:[.70,.70],ankle:[.64,.71],knee:[.58,.60],hip:[.50,.785],lspine:[.44,.775],chest:[.40,.775],neck:[.36,.755],head:[.315,.715],elbow:[.45,.69],wrist:[.50,.615]}},
+        {t:0.60,contact:null,     p:{foot:[.70,.70],ankle:[.64,.71],knee:[.58,.60],hip:[.50,.785],lspine:[.44,.775],chest:[.40,.775],neck:[.36,.755],head:[.315,.715],elbow:[.475,.785],wrist:[.545,.735]}},
+        {t:0.80,contact:'wrists', p:{foot:[.70,.70],ankle:[.64,.71],knee:[.58,.60],hip:[.50,.785],lspine:[.44,.775],chest:[.40,.775],neck:[.36,.755],head:[.315,.715],elbow:[.475,.80],wrist:[.585,.808]}},
+        {t:1.00,contact:null,     p:{foot:[.70,.70],ankle:[.64,.71],knee:[.58,.60],hip:[.50,.785],lspine:[.44,.775],chest:[.40,.775],neck:[.36,.755],head:[.315,.715],elbow:[.475,.802],wrist:[.585,.808]}},
+      ]},
+    { id:'seated', level:2, label:'Seated roll', jp:'長座', dur:2.8,
+      expected:['wrists','shoulders'],
+      desc:'From long sitting, legs out and chin on the chest. The hips are already on the mat, so there is no hip sound. Round the back and roll down the spine. The palms and forearms slap a split second before the upper back arrives.',
+      kf:[
+        {t:0.00,contact:null,       p:{foot:[.80,.745],ankle:[.73,.745],knee:[.62,.73],hip:[.47,.775],lspine:[.45,.665],chest:[.44,.55],neck:[.45,.47],head:[.47,.435],elbow:[.53,.60],wrist:[.615,.55]}},
+        {t:0.16,contact:null,       p:{foot:[.79,.725],ankle:[.72,.725],knee:[.61,.70],hip:[.475,.783],lspine:[.45,.71],chest:[.445,.61],neck:[.45,.525],head:[.475,.49],elbow:[.53,.645],wrist:[.605,.595]}},
+        {t:0.50,contact:'wrists',   p:L.slap},
+        {t:0.60,contact:'shoulders',p:L.back},
+        {t:1.00,contact:null,       p:L.end},
+      ]},
+    { id:'squat', level:3, label:'Squat drop', jp:'しゃがんで', dur:2.6,
+      expected:['hips','wrists','shoulders'],
+      desc:'From a low crouch, sit back so the hips land close to the heels, then roll. Hips first, then the slap, then the back a split second later. A short drop keeps the arrival soft.',
+      kf:[
+        {t:0.00,contact:null,       p:{foot:[.61,.795],ankle:[.565,.79],knee:[.61,.65],hip:[.50,.59],lspine:[.49,.50],chest:[.485,.41],neck:[.485,.345],head:[.505,.31],elbow:[.56,.47],wrist:[.635,.475]}},
+        {t:0.24,contact:'hips',     p:{foot:[.60,.785],ankle:[.55,.78],knee:[.60,.665],hip:[.485,.775],lspine:[.455,.695],chest:[.455,.60],neck:[.465,.52],head:[.495,.485],elbow:[.535,.64],wrist:[.61,.61]}},
+        {t:0.52,contact:'wrists',   p:L.slap},
+        {t:0.61,contact:'shoulders',p:L.back},
+        {t:1.00,contact:null,       p:L.end},
+      ]},
+    { id:'standing', level:4, label:'Standing fall', jp:'立って', dur:2.4,
+      expected:['hips','wrists','shoulders'],
+      desc:'The full backward breakfall. Bend the knees deeply so the hips land close to the heels, roll the rounded back onto the mat and slap with the palms and forearms just before the back lands. Keep the chin tucked the whole way. The elbow never strikes or supports.',
+      kf:[
+        {t:0.00,contact:null,       p:{foot:[.575,.795],ankle:[.53,.79],knee:[.53,.63],hip:[.52,.47],lspine:[.52,.37],chest:[.52,.27],neck:[.52,.20],head:[.53,.14],elbow:[.521,.378],wrist:[.531,.484]}},
+        {t:0.16,contact:null,       p:{foot:[.575,.795],ankle:[.53,.79],knee:[.585,.665],hip:[.50,.615],lspine:[.49,.52],chest:[.485,.42],neck:[.485,.35],head:[.50,.295],elbow:[.525,.525],wrist:[.60,.585]}},
+        {t:0.34,contact:'hips',     p:{foot:[.585,.79],ankle:[.54,.785],knee:[.60,.665],hip:[.485,.775],lspine:[.455,.695],chest:[.455,.60],neck:[.465,.52],head:[.495,.485],elbow:[.495,.685],wrist:[.585,.71]}},
+        {t:0.57,contact:'wrists',   p:L.slap},
+        {t:0.65,contact:'shoulders',p:L.back},
+        {t:1.00,contact:null,       p:L.end},
+      ]},
+  ];
+  window.PROGRESSIONS = PROGRESSIONS;
+  window.PROG_BY_ID = Object.fromEntries(PROGRESSIONS.map(p=>[p.id,p]));
+
+  function lerpPose(a,b,u){ const o={}; JOINTS.forEach(j=>{ o[j]=[a.p[j][0]+(b.p[j][0]-a.p[j][0])*u, a.p[j][1]+(b.p[j][1]-a.p[j][1])*u]; }); return o; }
+
+  /* Rigid bones: keyframes are hand-placed, so segment lengths drift
+     between poses. After every interpolation the canonical bone lengths
+     are re-imposed in aspect-corrected space, walking outward from the
+     hip, which keeps the proportions constant in every frame. */
+  const ASP=4/3;
+  const BONE_LEN={ 'hip>lspine':0.080,'lspine>chest':0.053,'chest>neck':0.057,'neck>head':0.072,
+                   'hip>knee':0.214,'knee>ankle':0.133,'ankle>foot':0.055,
+                   'chest>elbow':0.108,'elbow>wrist':0.116 };
+  const CHAIN=[['hip','lspine'],['lspine','chest'],['chest','neck'],['neck','head'],
+               ['hip','knee'],['knee','ankle'],['ankle','foot'],
+               ['chest','elbow'],['elbow','wrist']];
+  function rigidify(o){
+    const q={}; JOINTS.forEach(j=>{ q[j]=[o[j][0]*ASP, o[j][1]]; });
+    CHAIN.forEach(([p,c])=>{ const len=BONE_LEN[p+'>'+c];
+      let dx=q[c][0]-q[p][0], dy=q[c][1]-q[p][1];
+      const L=Math.hypot(dx,dy)||1e-6; dx/=L; dy/=L;
+      q[c]=[q[p][0]+dx*len, q[p][1]+dy*len]; });
+    const r={}; JOINTS.forEach(j=>{ r[j]=[q[j][0]/ASP, q[j][1]]; });
+    return r;
+  }
+  function poseAt(kf,prog){
+    let o;
+    if(prog<=0) o=lerpPose(kf[0],kf[0],0);
+    else if(prog>=1) o=lerpPose(kf[kf.length-1],kf[kf.length-1],0);
+    else{ let i=0; while(i<kf.length-1 && prog>kf[i+1].t) i++;
+      const u=smooth((prog-kf[i].t)/(kf[i+1].t-kf[i].t));
+      o=lerpPose(kf[i],kf[i+1],u); }
+    return rigidify(o);
+  }
+
+  const UI_FONT=`-apple-system,BlinkMacSystemFont,"SF Pro Text","Inter","Helvetica Neue",Arial,sans-serif`;
+  const JP_FONT=`"Hiragino Mincho ProN","Yu Mincho","Shippori Mincho","Noto Serif JP",serif`;
+
+  class Ukemi{
+    constructor(canvas,opts={}){
+      this.cv=canvas; this.cx=canvas.getContext('2d');
+      this.opts=opts; this.prog=0; this.playing=false; this.raf=null;
+      this.ripples=[]; this.fired={}; this.glow={};
+      this.setProgression(opts.progression||'standing',true);
+      this._resize(); this._ro=new ResizeObserver(()=>this._resize()); this._ro.observe(canvas);
+      this.draw();
+    }
+    setProgression(id,silent){
+      const P=window.PROG_BY_ID[id]||window.PROG_BY_ID.standing;
+      this.P=P; this.kf=P.kf; this.dur=P.dur;
+      this.prog=0; this.fired={}; this.glow={}; this.ripples=[]; this.playing=false;
+      if(!silent){ cancelFrame(this.raf); this.draw(); }
+    }
+    _resize(){ const r=this.cv.getBoundingClientRect(),d=Math.min(2,devicePixelRatio||1);
+      this.cv.width=Math.max(2,r.width*d); this.cv.height=Math.max(2,r.height*d); this.W=r.width; this.H=r.height; this.d=d;
+      // the figure is drawn in pixels sized for a 640-wide stage; scale with the stage
+      this.s=d*Math.max(0.55,Math.min(1.35,(r.width||640)/640));
+      this.draw(); }
+    _xy(p){ const padX=0.06,padY=0.05; return [ (padX+p[0]*(1-2*padX))*this.W*this.d, (padY+p[1]*(1-padY*2))*this.H*this.d ]; }
+
+    play(dur){ Sono.resume(); this.dur=dur||this.dur; this.prog=0; this.fired={}; this.ripples=[]; this.glow={};
+      this.playing=true; this.t0=performance.now();
+      if(this.opts.onStart) this.opts.onStart();
+      cancelFrame(this.raf); this._loop(); }
+    stop(){ this.playing=false; cancelFrame(this.raf); }
+    reset(){ this.stop(); this.prog=0; this.fired={}; this.glow={}; this.ripples=[]; this.draw(); if(this.opts.onReset) this.opts.onReset(); }
+
+    _loop(){
+      const now=performance.now(); this.prog=Math.min(1,(now-this.t0)/(this.dur*1000));
+      const pose=poseAt(this.kf,this.prog);
+      this.kf.forEach(k=>{ if(k.contact && !this.fired[k.contact] && this.prog>=k.t){ this.fired[k.contact]=true;
+        const j=Object.keys(CONTACT_JOINTS).find(x=>CONTACT_JOINTS[x]===k.contact);
+        const xy=this._xy(pose[j]); this.ripples.push({x:xy[0],y:this._floorY(),r:0,c:(window.PART_COLOR[k.contact]||'#fff'),a:1});
+        this.glow[k.contact]={t:now};
+        if(this.opts.onContact) this.opts.onContact(k.contact); } });
+      if(this.opts.onFrame){ const h=Math.max(0,Math.min(1,(FLOOR-pose.hip[1])/(FLOOR-0.46))); const x=(pose.hip[0]-0.5)*2; this.opts.onFrame({h,x,prog:this.prog}); }
+      this.draw(pose,now);
+      if(this.prog>=1){ this.playing=false; if(this.opts.onEnd) this.opts.onEnd(); return; }
+      this.raf=nextFrame(()=>this._loop());
+    }
+    _floorY(){ return (0.05+FLOOR*(1-0.05*2))*this.H*this.d + 8*this.s; }
+
+    draw(pose,now){
+      const cx=this.cx, d=this.d, s=this.s||d; pose=pose||poseAt(this.kf,this.prog); now=now||performance.now();
+      const CW=this.cv.width, CH=this.cv.height;
+      cx.clearRect(0,0,CW,CH);
+      const cs=getComputedStyle(this.cv), V=(n,f)=>(cs.getPropertyValue(n)||'').trim()||f;
+      const C={fig:V('--st-fig','#262421'),far:V('--st-far','#77726a'),wall:V('--st-wall','#e6e0d4'),line:V('--st-line','#262421'),
+               floor:V('--st-floor','#d3c6a4'),text:V('--st-text','#5c5852'),elbow:V('--st-elbow','#2f7d4a'),shadow:V('--st-shadow','rgba(35,33,30,.22)')};
+      const fy=this._floorY();
+
+      // ---- the mat: one quiet line, a faint straw-coloured floor below it ----
+      cx.fillStyle=C.floor; cx.fillRect(0,fy,CW,CH-fy);
+      cx.strokeStyle=C.line; cx.lineWidth=1.25*d;
+      cx.beginPath(); cx.moveTo(0,fy+0.5*d); cx.lineTo(CW,fy+0.5*d); cx.stroke();
+      cx.fillStyle=C.text; cx.textBaseline='alphabetic'; cx.textAlign='start';
+      cx.font=`${12*s}px ${JP_FONT}`; cx.fillText('畳',16*s,fy+22*s);
+      cx.font=`${11*s}px ${UI_FONT}`; cx.fillText('tatami',33*s,fy+21.5*s);
+
+      // ---- ripples where a part has landed ----
+      this.ripples=this.ripples.filter(r=>{ r.r+=2.6*s; r.a-=0.02;
+        if(r.a<=0) return false;
+        cx.strokeStyle=hexA(r.c,r.a*0.95); cx.lineWidth=2.5*s; cx.beginPath();
+        cx.ellipse(r.x,r.y,r.r,r.r*0.22,0,0,7); cx.stroke(); return true; });
+
+      const P=Object.fromEntries(JOINTS.map(j=>[j,this._xy(pose[j])]));
+      cx.lineCap='round'; cx.lineJoin='round';
+
+      // ---- soft ground shadow under the body ----
+      (()=>{ const xs=Object.values(P).map(p=>p[0]), ys=Object.values(P).map(p=>p[1]);
+        const minX=Math.min(...xs), maxX=Math.max(...xs);
+        const cxm=(minX+maxX)/2, w=Math.max((maxX-minX)*0.6, 46*s);
+        const close=Math.max(0,Math.min(1,1-(fy-Math.max(...ys))/(90*s)));
+        const g2=cx.createRadialGradient(cxm,fy,0,cxm,fy,w);
+        cx.globalAlpha=0.6+0.4*close;
+        g2.addColorStop(0,C.shadow); g2.addColorStop(1,'rgba(0,0,0,0)');
+        cx.fillStyle=g2; cx.beginPath(); cx.ellipse(cxm,fy+2*s,w,w*0.1,0,0,7); cx.fill(); cx.globalAlpha=1; })();
+
+      // ---- pictogram body: capsules between joints ----
+      const limb=(pts,radii,fill)=>{ cx.fillStyle=fill;
+        for(let i=0;i<pts.length-1;i++){ const a=pts[i],b=pts[i+1],ra=radii[i]*s,rb=radii[i+1]*s;
+          const dx=b[0]-a[0],dy=b[1]-a[1],L=Math.hypot(dx,dy)||1,nx=-dy/L,ny=dx/L;
+          cx.beginPath(); cx.moveTo(a[0]+nx*ra,a[1]+ny*ra); cx.lineTo(b[0]+nx*rb,b[1]+ny*rb);
+          cx.lineTo(b[0]-nx*rb,b[1]-ny*rb); cx.lineTo(a[0]-nx*ra,a[1]-ny*ra); cx.closePath(); cx.fill(); }
+        for(let i=0;i<pts.length;i++){ cx.beginPath(); cx.arc(pts[i][0],pts[i][1],radii[i]*s,0,7); cx.fill(); } };
+      const GI=C.fig, GI_FAR=C.far;
+      limb([P.chest,P.elbow,P.wrist],[10,7,5.5],GI_FAR);            // far arm
+      limb([P.hip,P.knee,P.ankle,P.foot],[14,10,6.5,5.5],GI_FAR);    // far leg
+      limb([P.hip,P.lspine,P.chest,P.neck],[15.5,16,15,8.5],GI);     // torso
+      // belt: a dark band across the waist
+      (()=>{ // worn low: just under the navel, about 40% of the way from the hip joint to the lower spine
+        const a=[P.hip[0]+(P.lspine[0]-P.hip[0])*0.42, P.hip[1]+(P.lspine[1]-P.hip[1])*0.42];
+        const dx=P.lspine[0]-P.hip[0], dy=P.lspine[1]-P.hip[1], L=Math.hypot(dx,dy)||1;
+        const nx=-dy/L, ny=dx/L, w=16.8*s;
+        cx.strokeStyle=C.wall; cx.lineWidth=5.5*s; cx.lineCap='butt'; cx.beginPath();
+        cx.moveTo(a[0]-nx*w,a[1]-ny*w); cx.lineTo(a[0]+nx*w,a[1]+ny*w); cx.stroke(); cx.lineCap='round'; })();
+      limb([P.hip,P.knee,P.ankle,P.foot],[14,10,6.5,5.5],GI);        // near leg
+      limb([P.chest,P.elbow,P.wrist],[10,7.5,6],GI);                 // near arm
+      limb([P.neck,P.head],[6.5,6.5],GI);
+      cx.fillStyle=GI; cx.beginPath(); cx.arc(P.head[0],P.head[1],14*s,0,7); cx.fill();
+
+      // ---- elbow: protected, never a landing point ----
+      (()=>{ const xy=P.elbow, col=C.elbow;
+        // light underlay first, so the ring shows on the body as well as on the wall
+        cx.strokeStyle=C.wall; cx.lineWidth=4.5*s; cx.beginPath(); cx.arc(xy[0],xy[1],10.5*s,0,7); cx.stroke();
+        cx.strokeStyle=col; cx.lineWidth=2*s; cx.setLineDash([3.5*s,3.5*s]);
+        cx.beginPath(); cx.arc(xy[0],xy[1],10.5*s,0,7); cx.stroke(); cx.setLineDash([]);
+        const label='elbow stays off';
+        cx.font=`500 ${11.5*s}px ${UI_FONT}`; const tw=cx.measureText(label).width;
+        const behind=xy[0]<P.chest[0]&&P.head[1]<P.hip[1]-60*s;   // upright, elbow behind the body: label goes on the back side
+        const tx=behind?Math.max(12*s,xy[0]-18*s-tw):Math.min(xy[0]+16*s, CW-tw-12*s), ty=behind?xy[1]+4*s:(P.wrist[0]>xy[0]&&P.wrist[1]<xy[1]-6*s)?xy[1]+30*s:xy[1]-15*s;   // drop below when the hand is raised in front
+        // small dark plate so the label reads on the red disc as well
+        cx.fillStyle=C.wall; cx.globalAlpha=0.85; cx.beginPath();
+        if(cx.roundRect) cx.roundRect(tx-7*s,ty-13*s,tw+14*s,19*s,9.5*s); else cx.rect(tx-7*s,ty-13*s,tw+14*s,19*s); cx.fill(); cx.globalAlpha=1;
+        cx.fillStyle=col; cx.fillText(label,tx,ty); })();
+
+      // ---- landing points, numbered in the order they should land ----
+      const expOrder=(this.P&&this.P.expected)||['hips','wrists','shoulders'];
+      const JOINT_OF={hips:'hip',wrists:'wrist',shoulders:'chest'};
+      ['hips','shoulders','wrists'].forEach(cj=>{
+        const xy=P[JOINT_OF[cj]], col=window.PART_COLOR[cj]||'#9fb', idx=expOrder.indexOf(cj);
+        let r=(idx>=0?9.5:5)*s;
+        if(this.glow[cj]){ const age=(now-this.glow[cj].t)/460; if(age<1){
+          cx.fillStyle=hexA(col,0.3*(1-age)); cx.beginPath(); cx.arc(xy[0],xy[1],r*(1.4+2.2*age),0,7); cx.fill();
+          r*=1+Math.sin(age*Math.PI)*0.35; } }
+        cx.fillStyle=col; cx.strokeStyle=C.fig; cx.lineWidth=2*s;
+        cx.globalAlpha=idx>=0?1:0.45;
+        cx.beginPath(); cx.arc(xy[0],xy[1],r,0,7); cx.fill(); cx.stroke(); cx.globalAlpha=1;
+        if(idx>=0){ cx.fillStyle='#1c1b19'; cx.font=`700 ${11*s}px ${UI_FONT}`; cx.textAlign='center'; cx.textBaseline='middle';
+          cx.fillText(String(idx+1),xy[0],xy[1]+0.5*s); cx.textAlign='start'; cx.textBaseline='alphabetic'; } });
+
+      if(!this.playing && (this.ripples.length || Object.keys(this.glow).some(k=>(now-this.glow[k].t)<480))){
+        nextFrame(()=>this.draw(pose,performance.now()));
+      }
+    }
+  }
+  function hexA(hex,a){ if(hex[0]!=='#') return hex.replace(/[\d.]+\)$/,a+')');
+    const n=parseInt(hex.slice(1),16); return `rgba(${(n>>16)&255},${(n>>8)&255},${n&255},${Math.max(0,a)})`; }
+
+  window.Ukemi=Ukemi;
+})();
+
+</script>
+<script>
+/* ============================================================
+   trainer.js — live camera pose tracking + landing detection
+   MediaPipe Tasks Vision (PoseLandmarker).
+   Landing order: hips → slap (wrists) → back (shoulders).
+   Three model sizes; "auto" picks by device and steps down
+   when the frame rate is too low to time a fall.
+   ============================================================ */
+(function(){
+  const GROUPS={ hips:[23,24], shoulders:[11,12], elbows:[13,14], wrists:[15,16], head:[0] };
+  const ORDER=['hips','wrists','shoulders'];
+  const CONN=[[11,12],[11,23],[12,24],[23,24],[11,13],[13,15],[12,14],[14,16],[23,25],[25,27],[24,26],[26,28],[0,11],[0,12]];
+  const VIS=0.4;
+  const HYST=0.035;      // re-arm hysteresis: must rise this far above the line
+  const JITTER_MS=250;   // guard against single-frame noise double-fires
+
+  const MP_VER='0.10.20';
+  const MP_BASE=`https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${MP_VER}`;
+  const MODEL_URL=k=>`https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_${k}/float16/1/pose_landmarker_${k}.task`;
+  // heavy is the most accurate BlazePose variant and holds on best to unusual
+  // poses (rolling, lying side-on); lite is the fastest.
+  const MODELS={
+    heavy:{ label:'Precise',  mb:30 },
+    full: { label:'Balanced', mb:9  },
+    lite: { label:'Fast',     mb:6  },
+  };
+  const TIERS=['heavy','full','lite'];
+  const MIN_FPS=18;      // below this a 300–600 ms landing sequence is sampled too coarsely
+  const UI_FONT=`-apple-system,BlinkMacSystemFont,"SF Pro Text","Inter","Helvetica Neue",Arial,sans-serif`;
+  const LABEL=()=>window.PART_LABEL||{};
+
+  class Trainer{
+    constructor(els,opts={}){
+      this.video=els.video; this.canvas=els.canvas; this.overlay=els.overlay;
+      this.opts=opts; this.threshold=0.80; this.running=false; this.landmarker=null;
+      this.last={}; this.prevY={}; this.prevT={}; this.seq=[]; this.stream=null; this.armed={};
+      this.cx=this.canvas.getContext('2d'); this.calib=null; this.calibrated=false; this.slope=0;
+      this.expected=ORDER.slice();
+      this.lastTs=0; this.detErr=0; this.frames=0; this.fps=0; this._fpsT=0;
+      this.hasPerson=false;
+      let pref='auto'; try{ pref=localStorage.getItem('ukemi.model')||'auto'; }catch(e){}
+      this.modelPref=(pref==='auto'||MODELS[pref])?pref:'auto';
+      this.modelKey=null; this.swapping=false; this._lastVT=-1; this._slow=null;
+    }
+    setProgression(id){ const P=window.PROG_BY_ID&&window.PROG_BY_ID[id]; this.expected=P?P.expected.slice():ORDER.slice(); this.seq=[]; }
+    setStatus(ic,h,p,show=true){ if(!this.overlay) return;
+      this.overlay.style.display=show?'flex':'none';
+      this.overlay.innerHTML = show?`<div class="ic">${ic}</div><h3>${h}</h3><p>${p}</p>`:''; }
+    hud(msg,cls){ if(this.opts.onHud) this.opts.onHud(msg,cls); }
+
+    /* ---------- model selection ---------- */
+    static get MODELS(){ return MODELS; }
+    _autoModel(){
+      const coarse=window.matchMedia&&matchMedia('(pointer:coarse)').matches;
+      const cores=navigator.hardwareConcurrency||4, mem=navigator.deviceMemory||8;
+      return (coarse||cores<=4||mem<=4)?'full':'heavy';
+    }
+    _wanted(){ return this.modelPref==='auto'?this._autoModel():this.modelPref; }
+    async _loadModel(key){
+      if(!this._vision){
+        this._vision=await import(`${MP_BASE}/vision_bundle.mjs`);
+        this._fileset=await this._vision.FilesetResolver.forVisionTasks(`${MP_BASE}/wasm`);
+      }
+      const make=delegate=>this._vision.PoseLandmarker.createFromOptions(this._fileset,{
+        baseOptions:{ modelAssetPath:MODEL_URL(key), delegate },
+        runningMode:'VIDEO', numPoses:1,
+        // presence and tracking are kept a little lenient so the tracker holds
+        // on while the body rolls back and goes horizontal
+        minPoseDetectionConfidence:0.5, minPosePresenceConfidence:0.4, minTrackingConfidence:0.4 });
+      let lm;
+      try{ lm=await make('GPU'); }
+      catch(e){ lm=await make('CPU'); }   // some machines reject the GPU delegate
+      const old=this.landmarker; this.landmarker=lm; this.modelKey=key;
+      try{ old&&old.close&&old.close(); }catch(e){}
+      this._slow=null; this._warm=null; this.lastTs=0; this._lastVT=-1;
+      this.opts.onModel&&this.opts.onModel(key,MODELS[key],this.modelPref);
+    }
+    async setModel(pref){
+      this.modelPref=(pref==='auto'||MODELS[pref])?pref:'auto';
+      try{ localStorage.setItem('ukemi.model',this.modelPref); }catch(e){}
+      const key=this._wanted();
+      if(!this.landmarker||key===this.modelKey){ this.opts.onModel&&this.opts.onModel(this.modelKey||key,MODELS[this.modelKey||key],this.modelPref); return; }
+      await this._swap(key,`Loading the ${MODELS[key].label} model…`);
+    }
+    async _swap(key,msg){
+      if(this.swapping) return; this.swapping=true; this.hud(msg,'warn');
+      try{ await this._loadModel(key); }
+      catch(e){ this.hud('Could not load that model. Still using '+(MODELS[this.modelKey]||{label:'the previous one'}).label+'.','err'); }
+      this.swapping=false;
+    }
+    // In auto mode, step down one size when the device cannot keep up.
+    // It looks at how long the model itself takes per frame, so a camera that
+    // delivers few frames (dim light) does not trigger a pointless downgrade.
+    _watchSpeed(ts,ms){
+      if(this.modelPref!=='auto'||this.swapping||this.calib) return;
+      const i=TIERS.indexOf(this.modelKey); if(i<0||i>=TIERS.length-1) return;
+      if(!this._warm) this._warm=ts+2500;       // skip shader compile / first inferences
+      if(ts<this._warm) return;
+      if(!this._slow) this._slow={t0:ts,n:0,sum:0};
+      this._slow.n++; this._slow.sum+=ms;
+      if(ts-this._slow.t0<4000||this._slow.n<20) return;
+      const avg=this._slow.sum/this._slow.n; this._slow=null;
+      if(avg>1000/MIN_FPS){ const next=TIERS[i+1];
+        this._swap(next,`${MODELS[this.modelKey].label} takes ${Math.round(avg)} ms per frame here, too slow to time a fall. Switching to ${MODELS[next].label}…`); }
+    }
+
+    async start(){
+      if(this.running) return;
+      if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+        this.setStatus('!','The camera is not available here',
+          'Browsers only allow camera access on secure pages. Open the app over https, or from localhost.');
+        return;
+      }
+      if(!this.landmarker){
+        const key=this._wanted();
+        this.setStatus('<span class="spin"></span>','Loading the tracking model',`The ${MODELS[key].label} model is about ${MODELS[key].mb}&nbsp;MB. It downloads once and then stays on this device.`);
+        try{ await this._loadModel(key); }
+        catch(e){
+          this.setStatus('!','The tracking model did not load',
+            'This is usually a network or firewall block on jsdelivr.net or googleapis.com. ('+(e&&e.message||e)+') The Watch tab still works without it.');
+          return;
+        }
+      }
+      this.setStatus('<span class="spin"></span>','Waiting for the camera','Allow camera access when the browser asks.');
+      try{
+        const base={width:{ideal:1280},height:{ideal:720},frameRate:{ideal:30}};
+        const v=this.deviceId?{...base,deviceId:{exact:this.deviceId}}:{...base,facingMode:'user'};
+        try{ this.stream=await navigator.mediaDevices.getUserMedia({video:v,audio:false}); }
+        catch(e1){ if(e1&&(e1.name==='NotAllowedError'||e1.name==='NotReadableError')) throw e1;
+          // desktop webcams / older browsers: fall back to any camera
+          this.stream=await navigator.mediaDevices.getUserMedia({video:true,audio:false}); }
+        const tr=this.stream.getVideoTracks()[0]; const st=tr&&tr.getSettings?tr.getSettings():{};
+        this.deviceId=st.deviceId||this.deviceId;
+        // mirror only front/user-facing cameras by default; external webcams can be toggled
+        if(this.mirror===undefined) this.mirror = st.facingMode ? st.facingMode==='user' : true;
+        this.applyMirror();
+        this.opts.onCameraReady&&this.opts.onCameraReady(this.deviceId);
+      }catch(e){
+        const n=e&&e.name||'';
+        const msg = n==='NotAllowedError' ? 'Camera access was blocked. Click the camera icon in the address bar, choose Allow, reload the page and start again.'
+          : n==='NotFoundError' ? 'No camera was found on this device.'
+          : n==='NotReadableError' ? 'Another app is using the camera (Zoom, Meet, Photo Booth). Close it and start again.'
+          : 'The camera could not be opened ('+n+'). Open the app in its own browser tab and allow the camera.';
+        this.setStatus('!','No camera',msg);
+        return;
+      }
+      this.video.srcObject=this.stream;
+      try{
+        await new Promise((res,rej)=>{ const to=setTimeout(()=>rej('The camera did not send a picture within 8 seconds.'),8000);
+          this.video.onloadedmetadata=()=>{clearTimeout(to);res();}; });
+        await this.video.play();
+      }catch(e){ this.setStatus('!','The video did not start',String(e)); return; }
+      this.canvas.width=this.video.videoWidth||640; this.canvas.height=this.video.videoHeight||480;
+      this.running=true; this.detErr=0; this.lastTs=0; this._lastVT=-1; this._slow=null; this.setStatus('','','',false); Sono.resume();
+      this.hud('Camera on. Looking for you…','warn');
+      this._loop();
+    }
+    applyMirror(){ const b=this.video&&this.video.closest('.videobox'); if(b) b.classList.toggle('nomirror',!this.mirror); }
+    setMirror(m){ this.mirror=!!m; this.applyMirror(); }
+    async switchCamera(id){ this.deviceId=id; this.mirror=undefined; if(this.running){ this.stop(); await this.start(); } }
+    static async listCameras(){ try{ const d=await navigator.mediaDevices.enumerateDevices(); return d.filter(x=>x.kind==='videoinput'); }catch(e){ return []; } }
+    stop(){ this.running=false; cancelAnimationFrame(this._sched); clearTimeout(this._timer);
+      if(this.stream){ this.stream.getTracks().forEach(t=>t.stop()); this.stream=null; }
+      if(this.video) this.video.srcObject=null;
+      this.setStatus('<span class="tri"></span>','Camera stopped','Start the camera to carry on.');
+      this.hud('Stopped',''); }
+
+    lineAt(x){ return this.threshold + this.slope*(x-0.5); }
+    _resetDetect(){ this.armed={}; this.prevY={}; this.prevT={}; this.last={}; this.seq=[]; }
+    setThreshold(v,manual){ this.threshold=v; if(manual) this.calibrated=true; this._resetDetect(); }
+    _say(txt){ try{ if(!window.speechSynthesis) return; speechSynthesis.cancel(); const u=new SpeechSynthesisUtterance(txt); u.rate=1; u.lang='en-US'; speechSynthesis.speak(u); }catch(e){} }
+    _beep(f=880,d=0.09,g=0.25){ try{ Sono.resume(); const c=Sono.ctx; const o=c.createOscillator(), a=c.createGain(); o.type='sine'; o.frequency.value=f;
+      a.gain.setValueAtTime(0.0001,c.currentTime); a.gain.exponentialRampToValueAtTime(g,c.currentTime+0.008); a.gain.exponentialRampToValueAtTime(0.0001,c.currentTime+d);
+      o.connect(a); a.connect(c.destination); o.start(); o.stop(c.currentTime+d+0.02); }catch(e){} }
+    // Calibration on demand: optional countdown (time to lie down), then 2.5 s of sampling while lying still.
+    calibrateLying(delay=10,secs=2.5){
+      if(!this.running){ this.hud('Start the camera first','warn'); this.opts.onCalibFail&&this.opts.onCalibFail('Start the camera first.'); return false; }
+      const now=performance.now();
+      this.calib={phase:delay>0?'count':'sample',tEnd:now+delay*1000,t0:now,secs,samples:[],lastSec:null};
+      this._say(delay>0?`Lie down on your back. Calibrating in ${delay} seconds.`:'Hold still.');
+      this.opts.onCalib && this.opts.onCalib(delay>0?`Lie down. Calibration starts in ${delay} seconds.`:'Hold still. Measuring…');
+      return true;
+    }
+    cancelCalib(){ if(!this.calib) return; this.calib=null; try{speechSynthesis.cancel();}catch(e){} this.opts.onCalibFail&&this.opts.onCalibFail('Calibration cancelled.'); }
+    _calibStep(lms,ts){
+      const c=this.calib;
+      if(c.phase==='count'){
+        const left=Math.ceil((c.tEnd-ts)/1000);
+        if(left!==c.lastSec){ c.lastSec=left; if(left>0){ this._beep(left<=3?990:660,0.08,left<=3?0.3:0.18); this.opts.onCalibTick&&this.opts.onCalibTick(left); } }
+        if(ts>=c.tEnd){ c.phase='sample'; c.t0=ts; c.samples=[]; this._beep(1320,0.18,0.3); this._say('Hold still.'); this.opts.onCalib&&this.opts.onCalib('Hold still. Measuring…'); }
+        return; }
+      if(lms){ const L=i=>lms[i]; const ok=[11,12,23,24].every(i=>L(i)&&L(i).visibility>=VIS);
+        if(ok) c.samples.push({hx:(L(23).x+L(24).x)/2,hy:(L(23).y+L(24).y)/2,sx:(L(11).x+L(12).x)/2,sy:(L(11).y+L(12).y)/2}); }
+      if(ts-c.t0<c.secs*1000) return;
+      this.calib=null;
+      const W=this.canvas.width,H=this.canvas.height;
+      const med=k=>{ const s=c.samples.map(o=>o[k]).sort((a,b)=>a-b); return s[Math.floor(s.length/2)]; };
+      const fail=msg=>{ this._beep(220,0.35,0.3); this._say('Calibration failed. '+msg); this.opts.onCalibFail&&this.opts.onCalibFail(msg); };
+      if(c.samples.length<8) return fail('The camera could not see your hips and shoulders. Make sure your whole body is in the picture.');
+      const hx=med('hx'),hy=med('hy'),sx=med('sx'),sy=med('sy');
+      const dxp=(sx-hx)*W, dyp=(sy-hy)*H;
+      if(Math.abs(dxp)<1.4*Math.abs(dyp)) return fail('You do not seem to be lying down. Lie flat on your back, side-on to the camera, and try again.');
+      const sd=Math.sqrt(c.samples.reduce((a,o)=>a+(o.hy-hy)**2,0)/c.samples.length);
+      if(sd>0.03) return fail('Too much movement. Lie still and try again.');
+      const slope=Math.max(-0.3,Math.min(0.3,(sy-hy)/((sx-hx)||1e-6)));
+      const yc=hy+slope*(0.5-hx);
+      const torso=Math.hypot(dxp,dyp)/H;
+      const margin=Math.max(0.015,Math.min(0.05,0.12*torso));
+      this.slope=slope; this.threshold=Math.min(0.97,Math.max(0.3,yc-margin)); this.calibrated=true; this._resetDetect();
+      this._beep(880,0.12,0.25); setTimeout(()=>this._beep(1320,0.2,0.25),130); this._say('Calibrated. Sit up and start practising.');
+      this.opts.onCalibDone && this.opts.onCalibDone(this.threshold,{slope,margin});
+    }
+
+    _loop(){
+      if(!this.running) return;
+      cancelAnimationFrame(this._sched); clearTimeout(this._timer);
+      const again=()=>{ this._sched=requestAnimationFrame(()=>this._loop()); this._timer=setTimeout(()=>this._loop(),50); };
+      // run the detector once per camera frame, never twice on the same one
+      const vt=this.video.currentTime;
+      const nowT=performance.now();
+      if(this.video.readyState>=2 && vt===this._lastVT && !this.swapping && nowT-(this._lastProc||0)<200){ again(); return; }
+      this._lastVT=vt; this._lastProc=nowT;
+      const cx=this.cx; cx.clearRect(0,0,this.canvas.width,this.canvas.height);
+
+      if(this.swapping){
+        this._drawThreshold();
+      } else if(this.video.readyState>=2){
+        // strictly increasing timestamp in ms
+        let ts=performance.now(); if(ts<=this.lastTs) ts=this.lastTs+1; this.lastTs=ts;
+        let res=null;
+        const t1=performance.now();
+        try{ res=this.landmarker.detectForVideo(this.video,ts); }
+        catch(e){ this.detErr++; if(this.detErr===3) this.hud('Tracking error: '+(e&&e.message||e),'err'); }
+        const lms=res&&res.landmarks&&res.landmarks[0];
+        this.frames++; if(ts-this._fpsT>500){ this.fps=Math.round(this.frames*1000/(ts-this._fpsT)); this.frames=0; this._fpsT=ts; }
+        this._watchSpeed(ts,performance.now()-t1);
+        const mname=(MODELS[this.modelKey]||{}).label||'';
+
+        if(lms){
+          if(!this.hasPerson){ this.hasPerson=true; }
+          if(this.calib) this._calibStep(lms,ts);
+          this._drawPose(lms);
+          if(this.calibrated && !this.calib) this._detect(lms,ts);
+          this.opts.onPose && this.opts.onPose(lms,ts);
+          const vis = ORDER.filter(g=>GROUPS[g].every(i=>lms[i]&&lms[i].visibility>=VIS)).map(g=>(LABEL()[g]||g).toLowerCase());
+          if(!this.swapping) this.hud(`Tracking at ${this.fps} fps, ${mname} model. Sees ${vis.join(', ')||'no landing points yet'}`,'ok');
+        } else {
+          this.hasPerson=false;
+          if(this.calib) this._calibStep(null,ts);
+          if(!this.swapping) this.hud(`No body in the picture (${this.fps} fps). Step back until your whole body fits.`,'warn');
+          this._drawThreshold();
+        }
+      } else {
+        this.hud('Waiting for the camera…','warn');
+      }
+      again();
+    }
+
+    // text drawn un-mirrored (the canvas is flipped in CSS for the selfie view)
+    _text(txt,x,y,{size=16,color='#fff',align='center',bold=true}={}){
+      const cx=this.cx,W=this.canvas.width; cx.save(); const mir=this.mirror!==false; if(mir){ cx.translate(W,0); cx.scale(-1,1); } else x=W-x;
+      cx.font=`${bold?'600 ':''}${size}px ${UI_FONT}`; cx.textAlign=align; cx.textBaseline='middle';
+      cx.lineWidth=Math.max(3,size/5); cx.strokeStyle='rgba(11,11,13,.8)'; cx.lineJoin='round'; cx.strokeText(txt,W-x,y); cx.fillStyle=color; cx.fillText(txt,W-x,y); cx.restore(); }
+    _drawThreshold(){
+      const cx=this.cx,W=this.canvas.width,H=this.canvas.height;
+      const col=this.calibrated?'rgba(244,244,240,.92)':'rgba(244,244,240,.4)';
+      cx.strokeStyle=col; cx.lineWidth=Math.max(2,W/420);
+      if(!this.calibrated) cx.setLineDash([10,8]);
+      cx.beginPath(); cx.moveTo(0,this.lineAt(0)*H); cx.lineTo(W,this.lineAt(1)*H); cx.stroke(); cx.setLineDash([]);
+      const s=Math.max(14,W/34);
+      if(this.swapping){
+        cx.fillStyle='rgba(11,11,13,.5)'; cx.fillRect(0,0,W,H);
+        this._text('Changing tracking model…',W/2,H*0.46,{size:s*1.1,color:'#f4f4f0'});
+      } else if(this.calib){
+        cx.fillStyle='rgba(11,11,13,.5)'; cx.fillRect(0,0,W,H);
+        if(this.calib.phase==='count'){ const left=Math.max(0,Math.ceil((this.calib.tEnd-performance.now())/1000));
+          this._text(String(left),W/2,H*0.42,{size:s*4.5,color:'#f4f4f0'});
+          this._text('Lie down on your back, side-on to the camera',W/2,H*0.62,{size:s}); }
+        else { const p=Math.min(1,(performance.now()-this.calib.t0)/(this.calib.secs*1000));
+          this._text('Hold still',W/2,H*0.42,{size:s*1.4,color:'#f4f4f0'});
+          const bh=Math.max(6,H/90);
+          cx.fillStyle='rgba(244,244,240,.22)'; cx.fillRect(W*0.25,H*0.52,W*0.5,bh);
+          cx.fillStyle='#f4f4f0'; cx.fillRect(W*0.75-W*0.5*p,H*0.52,W*0.5*p,bh); }
+      } else if(!this.calibrated){
+        this._text('Not calibrated yet. Press Calibrate, then lie down.',W/2,H*0.08,{size:s,color:'#f2b84b'});
+      } else {
+        this._text('mat line',W*0.06,this.lineAt(0.94)*H-s*0.9,{size:s*0.8,color:'#f4f4f0',align:'left'});
+      }
+    }
+    _drawPose(lms){
+      const cx=this.cx,W=this.canvas.width,H=this.canvas.height;
+      cx.lineWidth=Math.max(2,W/260); cx.strokeStyle='rgba(244,244,240,.75)'; cx.lineCap='round';
+      CONN.forEach(([a,b])=>{ const A=lms[a],B=lms[b]; if(!A||!B||A.visibility<VIS||B.visibility<VIS) return;
+        cx.beginPath(); cx.moveTo(A.x*W,A.y*H); cx.lineTo(B.x*W,B.y*H); cx.stroke(); });
+      Object.entries(GROUPS).forEach(([g,idx])=>{ const col=window.PART_COLOR[g]||'#9fb';
+        idx.forEach(i=>{ const p=lms[i]; if(!p||p.visibility<VIS) return;
+          if(g==='elbows'){ // protected: hollow dashed ring, red flash on a caution
+            const warn=this.elbowWarnT&&(performance.now()-this.elbowWarnT<900);
+            cx.strokeStyle=warn?window.PART_COLOR.head:col; cx.lineWidth=Math.max(2,W/300); cx.setLineDash([4,3]);
+            cx.beginPath(); cx.arc(p.x*W,p.y*H,Math.max(7,W/100),0,7); cx.stroke(); cx.setLineDash([]);
+            if(warn) this._text('Lift the elbow',p.x*W,p.y*H-Math.max(18,W/30),{size:Math.max(13,W/45),color:window.PART_COLOR.head});
+            return; }
+          cx.fillStyle=col; cx.strokeStyle='rgba(11,11,13,.85)'; cx.lineWidth=Math.max(1.5,W/500);
+          cx.beginPath(); cx.arc(p.x*W,p.y*H,Math.max(6,W/105),0,7); cx.fill(); cx.stroke(); }); });
+      this._drawThreshold();
+    }
+
+    _detect(lms,ts){
+      // Elbows are watched only to warn: they must never strike or support.
+      const active=[...this.expected,'head','elbows'];
+      Object.entries(GROUPS).forEach(([g,idx])=>{
+        if(!active.includes(g)) return;
+        const pts=idx.map(i=>lms[i]).filter(Boolean);
+        if(pts.length<idx.length) return;
+        if(pts.some(p=>p.visibility<VIS)) return;
+        const y=pts.reduce((a,p)=>a+p.y,0)/pts.length;
+        const x=pts.reduce((a,p)=>a+p.x,0)/pts.length;
+        let vel=0; if(this.prevY[g]!=null){ const dt=(ts-this.prevT[g])/1000; if(dt>0) vel=(y-this.prevY[g])/dt; }
+        this.prevY[g]=y; this.prevT[g]=ts;
+        // Edge-triggered crossing with one-frame velocity look-ahead:
+        // if the part is moving down fast enough to cross the line by the
+        // next frame, fire now. This removes one frame of perceived latency.
+        const th=this.lineAt(x);
+        if(this.armed[g]===undefined) this.armed[g] = y <= th; // arm only if starting above
+        const dtNext=1/Math.max(15,Math.min(30,this.fps||30));
+        const yPred = y + Math.max(0,vel)*dtNext;
+        const beyond = y > th;
+        const willCross = yPred > th && vel > 0.25; // only predict on real downward motion
+        if((beyond||willCross) && this.armed[g] && (!this.last[g] || ts-this.last[g]>JITTER_MS)){
+          this.armed[g]=false; this.last[g]=ts;
+          const intensity=Math.max(0.15,Math.min(1, vel*0.9 ));
+          this._fire(g,{intensity,pan:(x-0.5)*2});
+        } else if(!beyond && y < th-HYST){
+          this.armed[g]=true;
+        }
+      });
+    }
+    _fire(g,opts){
+      if(g==='head'){ Sono.error(); this.seq=[]; this.opts.onContact&&this.opts.onContact('head',{error:true}); return; }
+      if(g==='elbows' && !this.expected.includes('elbows')){
+        this.elbowWarnT=performance.now();
+        Sono.caution(); this.opts.onContact&&this.opts.onContact('elbows',{caution:true}); return; }
+      Sono.trigger(g,opts);
+      this.seq.push(g);
+      const EXP=this.expected;
+      // Accept the exact order, and also tolerate the slap and the back
+      // landing in either order: in reality they are a split second apart
+      // and camera frames can swap them.
+      const swapped=EXP.slice(); const wi=swapped.indexOf('wrists'), si=swapped.indexOf('shoulders');
+      if(wi>=0&&si>=0){ swapped[wi]='shoulders'; swapped[si]='wrists'; }
+      const matches=(order)=>this.seq.every((s,i)=>s===order[i]);
+      const ok = matches(EXP)||matches(swapped);
+      if(!ok) this.seq=[g];
+      const complete = this.seq.length===EXP.length && (matches(EXP)||matches(swapped));
+      this.opts.onContact && this.opts.onContact(g,{intensity:opts.intensity,complete});
+      if(complete){ if(Sono.getMode()==='m7_harmony') Sono.resolveChord(true); this.seq=[]; }
+    }
+  }
+  window.Trainer=Trainer;
+})();
+
+</script>
+<script>
+/* ============================================================
+   research.js — recording, questionnaire, session review
+   Records events (landings, errors, completions, mode changes),
+   pose data (33 MediaPipe landmarks per frame, camera only) and
+   questionnaire answers. Exports CSV and JSON to local files.
+   No server: everything stays on this device.
+   ============================================================ */
+(function(){
+  const $=(s,r=document)=>r.querySelector(s);
+  const S = {
+    recording:false,
+    participantId:'P'+Math.random().toString(36).slice(2,6).toUpperCase(),
+    startedISO:null, t0:0,
+    events:[], poses:[], poseEvery:2, _poseN:0,
+    meta:{app:'ukemi-sound-trainer v2'},
+  };
+
+  const now=()=>S.recording?Math.round(performance.now()-S.t0):0;
+
+  function logEvent(e){ if(!S.recording) return;
+    S.events.push(Object.assign({t:now()},e)); refreshStats(); }
+  function logPose(lms,ts){ if(!S.recording) return;
+    if((S._poseN++%S.poseEvery)!==0) return;
+    S.poses.push({t:now(), lm:lms.map(p=>[+p.x.toFixed(4),+p.y.toFixed(4),+(p.z||0).toFixed(4),+(p.visibility||0).toFixed(2)])});
+  }
+  function setThreshold(v){ S.meta.threshold=v; }
+  function setModel(k){ S.meta.poseModel=k; }
+
+  function start(){
+    S.recording=true; S.startedISO=new Date().toISOString(); S.t0=performance.now();
+    S.events=[]; S.poses=[]; S._poseN=0;
+    logEvent({type:'session_start', mode:Sono.getMode()});
+    $('#recBtn').classList.add('rec'); $('#recBtn').textContent='Stop recording';
+    $('#recDot').style.display='inline-block'; refreshStats();
+  }
+  function stop(){ if(!S.recording) return;
+    logEvent({type:'session_end'}); S.recording=false;
+    $('#recBtn').classList.remove('rec'); $('#recBtn').textContent='Start recording';
+    $('#recDot').style.display='none'; refreshStats();
+  }
+  function refreshStats(){
+    const el=$('#recStats'); if(!el) return;
+    const contacts=S.events.filter(e=>e.type==='contact').length;
+    const errors=S.events.filter(e=>e.type==='head_error').length;
+    const completes=S.events.filter(e=>e.type==='sequence_complete').length;
+    el.innerHTML=`<div class="stat"><div class="k">Events</div><div class="v">${S.events.length}</div></div>
+      <div class="stat"><div class="k">Landings</div><div class="v">${contacts}</div></div>
+      <div class="stat"><div class="k">Completed</div><div class="v">${completes}</div></div>
+      <div class="stat"><div class="k">Head errors</div><div class="v">${errors}</div></div>
+      <div class="stat"><div class="k">Pose frames</div><div class="v">${S.poses.length}</div></div>`;
+  }
+
+  /* ---------- questionnaire (per Sauro & Lewis, Quantifying the UX) ----------
+     Post-study: SUS, the standard 10-item scale (Brooke 1996), scored 0–100;
+     mean benchmark ≈ 68 (Sauro & Lewis 2012, Ch.8).
+     Post-task: SEQ, the Single Ease Question, 7 points.
+     The item wording is the published wording and must not be edited. */
+  const DEMO=[
+    {id:'age',label:'Age group',opts:['under 18','18–29','30–44','45–59','60+']},
+    {id:'judo',label:'Judo experience',opts:['none','beginner (<1 yr)','intermediate (1–5 yrs)','advanced (5+ yrs)']},
+    {id:'music',label:'Musical training',opts:['none','some','formally trained']},
+  ];
+  const SUS=[
+    {id:'sus1',pos:true, text:'I think that I would like to use this system frequently.'},
+    {id:'sus2',pos:false,text:'I found the system unnecessarily complex.'},
+    {id:'sus3',pos:true, text:'I thought the system was easy to use.'},
+    {id:'sus4',pos:false,text:'I think that I would need the support of a technical person to be able to use this system.'},
+    {id:'sus5',pos:true, text:'I found the various functions in this system were well integrated.'},
+    {id:'sus6',pos:false,text:'I thought there was too much inconsistency in this system.'},
+    {id:'sus7',pos:true, text:'I would imagine that most people would learn to use this system very quickly.'},
+    {id:'sus8',pos:false,text:'I found the system very cumbersome to use.'},
+    {id:'sus9',pos:true, text:'I felt very confident using the system.'},
+    {id:'sus10',pos:false,text:'I needed to learn a lot of things before I could get going with this system.'},
+  ];
+  const SUS_SCALE=['1 strongly disagree','2','3','4','5 strongly agree'];
+  const SEQ_SCALE=['1 very difficult','2','3','4','5','6','7 very easy'];
+
+  function buildQuestionnaire(){
+    const host=$('#qForm'); if(!host) return;
+    const group=(name,legend,opts)=>`<fieldset class="qrow"><legend class="qlabel">${legend}</legend><div class="qopts">${
+      opts.map(([v,l])=>`<label class="qopt"><input type="radio" name="${name}" value="${v}"><span>${l}</span></label>`).join('')}</div></fieldset>`;
+    let h='';
+    h+='<h4 class="qsec">About the participant</h4>';
+    DEMO.forEach(d=>{ h+=group(d.id,d.label,d.opts.map(o=>[o,o])); });
+    h+='<h4 class="qsec">Task difficulty (SEQ)</h4><p class="note">Ask this straight after the trials.</p>';
+    h+=group('seq','Overall, how difficult or easy was it to perform the breakfall with the sound feedback?',SEQ_SCALE.map((s,i)=>[i+1,s]));
+    h+='<h4 class="qsec">System Usability Scale (SUS)</h4>';
+    SUS.forEach(q=>{ h+=group(q.id,q.text,SUS_SCALE.map((s,i)=>[i+1,s])); });
+    h+='<h4 class="qsec">Sound preference</h4>';
+    h+=group('bestMode','Which sound mode felt most natural?',[...window.MODES.map(m=>[m.id,`${m.n} ${m.short}`]),['none','No preference']]);
+    h+=`<div class="qrow"><label class="qlabel" for="qComment">Comments (optional)</label><textarea id="qComment" rows="3" placeholder="Anything that was confusing, helpful or surprising"></textarea></div>`;
+    h+=`<div class="qrow"><div id="susLive" class="note"></div></div>`;
+    host.innerHTML=h;
+    host.addEventListener('change',updateSusLive);
+    updateSusLive();
+  }
+  function susScore(q){
+    let sum=0,n=0;
+    SUS.forEach(s=>{ const v=parseInt(q[s.id]); if(!isNaN(v)){ sum+= s.pos ? v-1 : 5-v; n++; } });
+    return n===SUS.length ? +(sum*2.5).toFixed(1) : null;
+  }
+  function susGrade(sc){ return sc>=78.9?'A, top 10%':sc>=72.6?'B, above average':sc>=62.7?'C, around the 68-point average':sc>=51.7?'D, below average':'F, bottom 15%'; }
+  function updateSusLive(){
+    const el=$('#susLive'); if(!el) return;
+    const sc=susScore(readQuestionnaire());
+    el.innerHTML = sc==null ? 'The SUS score appears here once all ten items are answered.'
+      : `<b>SUS score: ${sc} / 100</b> (grade ${susGrade(sc)}; benchmark mean ≈ 68, Sauro &amp; Lewis 2012).`;
+  }
+  function readQuestionnaire(){
+    const q={};
+    [...DEMO.map(d=>d.id),'seq',...SUS.map(l=>l.id),'bestMode'].forEach(n=>{
+      const el=document.querySelector(`input[name="${n}"]:checked`); q[n]=el?el.value:''; });
+    q.comment=($('#qComment')&&$('#qComment').value||'').replace(/[\r\n]+/g,' ').trim();
+    const sc=susScore(q); if(sc!=null) q.sus_score=sc;
+    return q;
+  }
+
+  /* ============================================================
+     Session review
+     Two stacked panels on one time axis:
+       top    — height of each landing point above the mat line
+                (camera recordings only)
+       bottom — one row per body part with a dot for every landing,
+                like a score; completed sequences are bracketed
+     The chart panel is always dark, so the part colours are the
+     same ones used on the stage and in the camera view.
+     ============================================================ */
+  const GROUP_IDX={hips:[23,24],wrists:[15,16],shoulders:[11,12],elbows:[13,14]};
+  const TRACES=['hips','wrists','shoulders','elbows'];
+  const LANES=['hips','wrists','shoulders','warn'];
+  const UI_FONT=`-apple-system,BlinkMacSystemFont,"SF Pro Text","Inter","Helvetica Neue",Arial,sans-serif`;
+  const INK='#f4f4f0', DIM='rgba(244,244,240,.62)', GRID='rgba(244,244,240,.1)', AXIS='rgba(244,244,240,.28)';
+  const lab=k=>(window.PART_LABEL||{})[k]||k;
+  let G=null, plotted=false;
+
+  function review(){ if(S.recording) stop(); plotted=true; drawPlot(); writeAssessment(); }
+
+  // landings that belong to each completed sequence
+  function sequences(){
+    const contacts=S.events.filter(e=>e.type==='contact');
+    const comp=S.events.filter(e=>e.type==='sequence_complete');
+    let prev=-1; const out=[];
+    comp.forEach(cp=>{ const P=window.PROG_BY_ID&&window.PROG_BY_ID[cp.progression];
+      const n=P?P.expected.length:3;
+      // the last n landings before this completion, from the same source
+      const run=contacts.filter(e=>e.t>prev&&e.t<=cp.t&&(e.source||'')===(cp.source||'')).slice(-n);
+      if(run.length) out.push({t0:run[0].t,t1:cp.t,contacts:run}); prev=cp.t; });
+    return out;
+  }
+  // the demo does not log completions; treat each demo trial's landings as a sequence
+  function demoSequences(){
+    const out=[]; const ev=S.events; let cur=null;
+    ev.forEach(e=>{ if(e.type==='trial_start'&&e.source==='demo'){ cur={t0:null,t1:null,contacts:[]}; out.push(cur); }
+      else if(cur&&e.type==='contact'&&e.source==='demo'){ if(cur.t0==null) cur.t0=e.t; cur.t1=e.t; cur.contacts.push(e); } });
+    return out.filter(s=>s.contacts.length>1);
+  }
+
+  function drawPlot(hoverT){
+    const cv=$('#plotCv'), wrap=$('#plot'), empty=$('#plotEmpty'), legend=$('#plotLegend'); if(!cv) return;
+    const ev=S.events, poses=S.poses;
+    const hasEv=ev.some(e=>e.type==='contact'||e.type==='head_error'||e.type==='elbow_caution');
+    const hasPose=poses.length>1;
+    if(!hasEv&&!hasPose){ if(wrap) wrap.hidden=true; if(legend) legend.hidden=true;
+      if(empty){ empty.hidden=false; empty.textContent=plotted?'There is nothing in this recording yet. Start a recording, do a few falls in Watch or Train, then plot again.':''; }
+      G=null; return; }
+    if(wrap) wrap.hidden=false; if(empty) empty.hidden=true; if(legend) legend.hidden=false;
+
+    const th=S.meta.threshold;
+    const rel=th!=null;                               // heights relative to the mat line
+    const laneH=28, lanesH=LANES.length*laneH, axisH=30, padT=30, gap=26;
+    const traceH=hasPose?Math.max(170,Math.min(260,Math.round((wrap.clientWidth||600)*0.3))):0;
+    const cssH=padT+(hasPose?traceH+gap:0)+lanesH+axisH;
+    cv.style.height=cssH+'px';
+    const dpr=Math.min(2,devicePixelRatio||1);
+    const W=cv.clientWidth, H=cssH; cv.width=Math.round(W*dpr); cv.height=Math.round(H*dpr);
+    const cx=cv.getContext('2d'); cx.setTransform(dpr,0,0,dpr,0,0); cx.clearRect(0,0,W,H);
+    const narrow=W<520;
+    const padL=narrow?44:54, padR=narrow?46:58;
+    const tMax=Math.max(ev.length?ev[ev.length-1].t:0, hasPose?poses[poses.length-1].t:0, 1000);
+    const X=t=>padL+(W-padL-padR)*(t/tMax);
+    const x0=padL, x1=W-padR;
+    cx.textBaseline='middle'; cx.lineJoin='round'; cx.lineCap='round';
+
+    // ---- time axis (shared) ----
+    const secs=tMax/1000;
+    const step=[0.5,1,2,5,10,20,30,60,120].find(s=>secs/s<=(narrow?6:10))||300;
+    const yLanes=padT+(hasPose?traceH+gap:0), yAxis=yLanes+lanesH;
+    cx.font=`11px ${UI_FONT}`; cx.textAlign='center';
+    for(let s=0;s<=secs+1e-6;s+=step){ const x=X(s*1000);
+      cx.strokeStyle=GRID; cx.lineWidth=1; cx.beginPath(); cx.moveTo(x,padT); cx.lineTo(x,yAxis); cx.stroke();
+      cx.fillStyle=DIM; cx.fillText((step<1?s.toFixed(1):s)+' s',x,yAxis+14); }
+
+    // ---- top panel: height traces ----
+    const series={};
+    let Y=null, yMin=0, yMax=1;
+    if(hasPose){
+      TRACES.forEach(g=>{ const idx=GROUP_IDX[g]; series[g]=poses.map(p=>{
+        const pts=idx.map(i=>p.lm[i]).filter(a=>a&&a[3]>=0.4);
+        if(pts.length<idx.length) return null;
+        const y=pts.reduce((s,a)=>s+a[1],0)/pts.length;
+        return {t:p.t, h:(rel?th:1)-y}; }); });
+      const all=TRACES.flatMap(g=>series[g].filter(Boolean).map(o=>o.h));
+      const hi=all.length?Math.max(...all):0.5;
+      yMin=rel?-0.05:0; yMax=Math.max(rel?0.2:0.5,Math.min(1,hi*1.1));
+      Y=h=>padT+traceH*(1-(Math.max(yMin,Math.min(yMax,h))-yMin)/(yMax-yMin));
+      // horizontal grid + labels
+      const span=yMax-(rel?0:yMin); const gstep=[0.05,0.1,0.2,0.25,0.5].find(s=>span/s<=5)||0.5;
+      cx.textAlign='right'; cx.font=`11px ${UI_FONT}`;
+      for(let v=0;v<=yMax+1e-6;v+=gstep){ const y=Y(v);
+        cx.strokeStyle=v===0&&rel?AXIS:GRID; cx.lineWidth=1; cx.beginPath(); cx.moveTo(x0,y); cx.lineTo(x1,y); cx.stroke();
+        cx.fillStyle=DIM; cx.fillText(Math.round(v*100)+'%',x0-8,y); }
+      if(rel){ // the mat line itself, and the zone below it
+        const ym=Y(0);
+        cx.fillStyle='rgba(196,190,146,.1)'; cx.fillRect(x0,ym,x1-x0,padT+traceH-ym);
+        cx.strokeStyle='rgba(244,244,240,.85)'; cx.lineWidth=1.5; cx.beginPath(); cx.moveTo(x0,ym); cx.lineTo(x1,ym); cx.stroke();
+        cx.textAlign='left'; cx.fillStyle=INK; cx.font=`600 11px ${UI_FONT}`; cx.fillText('mat',x1+8,ym); }
+      // traces, with breaks where the camera lost the part
+      const ends=[];
+      cx.save(); cx.beginPath(); cx.rect(x0,padT-2,x1-x0,traceH+4); cx.clip();
+      TRACES.forEach(g=>{ cx.strokeStyle=window.PART_COLOR[g]; cx.lineWidth=g==='elbows'?1.5:2;
+        if(g==='elbows') cx.setLineDash([4,4]);
+        cx.beginPath(); let on=false, last=null;
+        series[g].forEach(o=>{ if(!o){ on=false; return; }
+          const px=X(o.t), py=Y(o.h); if(!on){ cx.moveTo(px,py); on=true; } else cx.lineTo(px,py); last=o; });
+        cx.stroke(); cx.setLineDash([]);
+        if(last) ends.push({g,y:Y(last.h)}); });
+      cx.restore();
+      // direct labels at the right edge, nudged apart
+      ends.sort((a,b)=>a.y-b.y);
+      for(let i=1;i<ends.length;i++) if(ends[i].y-ends[i-1].y<13) ends[i].y=ends[i-1].y+13;
+      const ymat=rel?Y(0):-99;
+      ends.forEach(e=>{ if(Math.abs(e.y-ymat)<12) e.y=ymat-13; });
+      cx.textAlign='left'; cx.font=`600 11px ${UI_FONT}`;
+      ends.forEach(e=>{ cx.fillStyle=window.PART_COLOR[e.g]; cx.fillText(lab(e.g),x1+8,Math.max(padT+6,Math.min(padT+traceH-6,e.y))); });
+      // panel title
+      cx.textAlign='left'; cx.fillStyle=DIM; cx.font=`11px ${UI_FONT}`;
+      cx.fillText(rel?'Height above the mat line, % of picture height':'Height in the picture, % (calibrate to measure from the mat line)',x0,padT-16);
+    }
+
+    // ---- bottom panel: landings, one row per part ----
+    const laneY=k=>yLanes+LANES.indexOf(k)*laneH+laneH/2;
+    cx.font=`11px ${UI_FONT}`;
+    if(!hasPose){ cx.textAlign='left'; cx.fillStyle=DIM; cx.fillText('Landings over time',x0,padT-16); }
+    LANES.forEach((k,i)=>{ const y=yLanes+i*laneH;
+      cx.strokeStyle=GRID; cx.lineWidth=1; cx.beginPath(); cx.moveTo(x0,y); cx.lineTo(x1,y); cx.stroke();
+      cx.textAlign='right'; cx.fillStyle=k==='warn'?DIM:window.PART_COLOR[k]; cx.font=`${k==='warn'?'':'600 '}11px ${UI_FONT}`;
+      cx.fillText(k==='warn'?(narrow?'Errors':'Errors'):lab(k),x0-8,y+laneH/2); });
+    cx.strokeStyle=AXIS; cx.beginPath(); cx.moveTo(x0,yAxis); cx.lineTo(x1,yAxis); cx.stroke();
+    // completed sequences: a bracket across the three part rows
+    const seqs=[...sequences(),...demoSequences()];
+    seqs.forEach(sq=>{ const a=X(sq.t0)-9, b=X(sq.t1)+9, top=yLanes+3, h=laneH*3-6;
+      cx.fillStyle='rgba(244,244,240,.07)'; cx.strokeStyle='rgba(244,244,240,.3)'; cx.lineWidth=1;
+      cx.beginPath(); if(cx.roundRect) cx.roundRect(a,top,b-a,h,9); else cx.rect(a,top,b-a,h); cx.fill(); cx.stroke();
+      // join the landings so the order reads as a shape
+      cx.strokeStyle='rgba(244,244,240,.45)'; cx.lineWidth=1.25; cx.beginPath();
+      sq.contacts.forEach((e,i)=>{ const px=X(e.t), py=laneY(e.part); if(py!==py) return; if(i===0) cx.moveTo(px,py); else cx.lineTo(px,py); }); cx.stroke(); });
+    ev.forEach(e=>{ const x=X(e.t);
+      if(e.type==='contact'&&LANES.includes(e.part)){ const y=laneY(e.part);
+        cx.fillStyle=window.PART_COLOR[e.part]; cx.strokeStyle='#24221f'; cx.lineWidth=1.5;
+        cx.beginPath(); cx.arc(x,y,5.5,0,7); cx.fill(); cx.stroke(); }
+      else if(e.type==='head_error'){ const y=laneY('warn'), r=5;
+        cx.strokeStyle=window.PART_COLOR.head; cx.lineWidth=2.25;
+        cx.beginPath(); cx.moveTo(x-r,y-r); cx.lineTo(x+r,y+r); cx.moveTo(x+r,y-r); cx.lineTo(x-r,y+r); cx.stroke();
+        if(hasPose){ cx.lineWidth=1; cx.setLineDash([3,4]); cx.beginPath(); cx.moveTo(x,padT); cx.lineTo(x,padT+traceH); cx.stroke(); cx.setLineDash([]); } }
+      else if(e.type==='elbow_caution'){ const y=laneY('warn');
+        cx.strokeStyle=window.PART_COLOR.elbows; cx.lineWidth=2; cx.beginPath(); cx.arc(x,y,5,0,7); cx.stroke(); } });
+
+    G={X,x0,x1,tMax,padT,yAxis,series,rel,hasPose,W};
+
+    // ---- hover: crosshair + readout ----
+    const tip=$('#plotTip');
+    if(hoverT!=null&&hoverT>=0&&hoverT<=tMax){
+      const x=X(hoverT);
+      cx.strokeStyle='rgba(244,244,240,.55)'; cx.lineWidth=1; cx.beginPath(); cx.moveTo(x,padT); cx.lineTo(x,yAxis); cx.stroke();
+      const rows=[];
+      if(hasPose){ TRACES.forEach(g=>{ const arr=series[g]; let best=null,bd=1e9;
+        arr.forEach(o=>{ if(!o) return; const d=Math.abs(o.t-hoverT); if(d<bd){bd=d;best=o;} });
+        if(best&&bd<400){ cx.fillStyle=window.PART_COLOR[g]; cx.strokeStyle='#24221f'; cx.lineWidth=1.5;
+          cx.beginPath(); cx.arc(X(best.t),Y(best.h),4,0,7); cx.fill(); cx.stroke();
+          rows.push(`<div><i style="background:${window.PART_COLOR[g]}"></i>${lab(g)}<b>${Math.round(best.h*100)}%</b></div>`); } }); }
+      const near=ev.filter(e=>Math.abs(e.t-hoverT)<(tMax/(x1-x0))*9&&(e.type==='contact'||e.type==='head_error'||e.type==='elbow_caution'));
+      near.forEach(e=>{ rows.push(`<div><i style="background:${e.type==='contact'?window.PART_COLOR[e.part]:e.type==='head_error'?window.PART_COLOR.head:window.PART_COLOR.elbows}"></i>${
+        e.type==='contact'?lab(e.part)+' landed':e.type==='head_error'?'Head touched the mat':'Elbow touched the mat'}<b>${(e.t/1000).toFixed(2)} s</b></div>`); });
+      if(tip){ tip.hidden=false; tip.innerHTML=`<div class="tt">${(hoverT/1000).toFixed(2)} s</div>${rows.join('')}`;
+        const tw=tip.offsetWidth||150; tip.style.left=Math.max(8,Math.min(W-tw-8,x+(x>W*0.6?-tw-12:12)))+'px'; tip.style.top=(padT+4)+'px'; }
+    } else if(tip){ tip.hidden=true; }
+  }
+  function bindPlot(){
+    const cv=$('#plotCv'); if(!cv) return;
+    const at=ev=>{ if(!G) return; const r=cv.getBoundingClientRect(); const x=(ev.touches?ev.touches[0].clientX:ev.clientX)-r.left;
+      if(x<G.x0||x>G.x1){ drawPlot(); return; } drawPlot((x-G.x0)/(G.x1-G.x0)*G.tMax); };
+    cv.addEventListener('mousemove',at); cv.addEventListener('mouseleave',()=>G&&drawPlot());
+    cv.addEventListener('touchstart',at,{passive:true}); cv.addEventListener('touchmove',at,{passive:true});
+    let rt; addEventListener('resize',()=>{ clearTimeout(rt); rt=setTimeout(()=>{ if(G) drawPlot(); },120); });
+  }
+
+  function writeAssessment(){
+    const el=$('#assess'); if(!el) return;
+    const contacts=S.events.filter(e=>e.type==='contact');
+    const comp=S.events.filter(e=>e.type==='sequence_complete');
+    const errs=S.events.filter(e=>e.type==='head_error');
+    const elbows=S.events.filter(e=>e.type==='elbow_caution');
+    const trials=S.events.filter(e=>e.type==='trial_start');
+    if(!contacts.length&&!errs.length&&!S.poses.length){ el.innerHTML=''; return; }
+    // gaps between landings inside completed sequences
+    const ints=[];
+    sequences().forEach(sq=>{ for(let i=1;i<sq.contacts.length;i++) ints.push(sq.contacts[i].t-sq.contacts[i-1].t); });
+    const mean=ints.length?ints.reduce((a,b)=>a+b,0)/ints.length:null;
+    const sd=ints.length>1?Math.sqrt(ints.reduce((a,b)=>a+(b-mean)**2,0)/(ints.length-1)):null;
+    const n=comp.length, seqWord=`${n} correct sequence${n===1?'':'s'}`;
+    let verdict;
+    if(n===0 && contacts.length>0 && trials.length>0 && !S.poses.length) verdict='This recording comes from the animated demo, so it shows the ideal order and timing.';
+    else if(n===0 && contacts.length>0) verdict='Landings were detected, but no full sequence came in the right order. Work on the order first.';
+    else if(errs.length>0) verdict=`${seqWord}, but the head crossed the mat line ${errs.length} time${errs.length===1?'':'s'}. Keep the chin tucked.`;
+    else if(n>0 && sd!=null && sd<120) verdict=`${seqWord} with even timing. A controlled, well-paced fall.`;
+    else if(n>0) verdict=`${seqWord}. The gaps between landings vary, so aim for a more even roll.`;
+    else verdict='No landings in this recording.';
+    const attempts=Math.max(trials.length,n);
+    el.innerHTML=`
+      <div class="statline">
+        <div class="stat"><div class="k">Attempts</div><div class="v">${attempts||'–'}</div></div>
+        <div class="stat"><div class="k">Correct sequences</div><div class="v">${n}</div></div>
+        <div class="stat"><div class="k">Head errors</div><div class="v${errs.length?' bad':''}">${errs.length}</div></div>
+        <div class="stat"><div class="k">Elbow touches</div><div class="v">${elbows.length}</div></div>
+        <div class="stat"><div class="k">Mean gap between landings</div><div class="v">${mean!=null?Math.round(mean)+' ms':'–'}</div></div>
+        <div class="stat"><div class="k">Spread of the gaps (SD)</div><div class="v">${sd!=null?Math.round(sd)+' ms':'–'}</div></div>
+      </div>
+      <p class="note">${verdict}${S.poses.length?'':' The height curves need the camera, so this plot shows landings only.'}</p>`;
+  }
+
+  function dl(name,text,type){ const b=new Blob([text],{type}); const a=document.createElement('a');
+    a.href=URL.createObjectURL(b); a.download=name; document.body.appendChild(a); a.click();
+    setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},400); }
+  const stamp=()=>new Date().toISOString().slice(0,19).replace(/[:T]/g,'-');
+  const csvEsc=v=>{ v=String(v==null?'':v); return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v; };
+
+  function exportJSON(){
+    stop();
+    const data={ participantId:$('#pid').value||S.participantId, startedISO:S.startedISO,
+      meta:Object.assign({},S.meta,{userAgent:navigator.userAgent}),
+      questionnaire:readQuestionnaire(), events:S.events, poses:S.poses,
+      poseFormat:'lm = 33 MediaPipe landmarks × [x,y,z,visibility], normalized image coords, every '+S.poseEvery+'nd processed frame' };
+    dl(`ukemi_${data.participantId}_${stamp()}.json`, JSON.stringify(data), 'application/json');
+  }
+  function exportCSV(){
+    stop();
+    const pid=$('#pid').value||S.participantId;
+    const cols=['participantId','t_ms','type','part','mode','progression','intensity','source'];
+    let rows=[cols.join(',')];
+    S.events.forEach(e=>rows.push([pid,e.t,e.type,e.part||'',e.mode||'',e.progression||'',e.intensity!=null?e.intensity.toFixed(2):'',e.source||''].map(csvEsc).join(',')));
+    dl(`ukemi_events_${pid}_${stamp()}.csv`, rows.join('\n'), 'text/csv');
+    const q=readQuestionnaire();
+    const qc=['participantId','timestamp',...Object.keys(q)];
+    dl(`ukemi_questionnaire_${pid}_${stamp()}.csv`, qc.join(',')+'\n'+[pid,new Date().toISOString(),...Object.values(q)].map(csvEsc).join(','), 'text/csv');
+  }
+
+  function init(){
+    const pid=$('#pid'); if(pid) pid.value=S.participantId;
+    buildQuestionnaire(); refreshStats(); bindPlot();
+    $('#recBtn').addEventListener('click',()=>S.recording?stop():start());
+    $('#expJson').addEventListener('click',exportJSON);
+    $('#expCsv').addEventListener('click',exportCSV);
+    $('#reviewBtn').addEventListener('click',review);
+  }
+
+  window.Research={ init, logEvent, logPose, setThreshold, setModel, get recording(){return S.recording;},
+    // lets the page be checked with a synthetic session
+    _load(d){ S.recording=false; S.events=d.events||[]; S.poses=d.poses||[]; if(d.threshold!=null) S.meta.threshold=d.threshold; refreshStats(); review(); } };
+})();
+
+</script>
+<script>
+/* ============================================================
+   app.js — wiring: navigation, demo stage, sound library, trainer
+   ============================================================ */
+(function(){
+  const $=(s,r=document)=>r.querySelector(s);
+  const $$=(s,r=document)=>[...r.querySelectorAll(s)];
+  let currentMode='m3_timbral';
+  let speed=2.4;
+  let currentProg='standing';
+
+  const SEQ_HINT={
+    m1_piano:{hips:'C4',wrists:'D4',shoulders:'E4'},
+    m2_sweep:{hips:'120→220 Hz',wrists:'220→380 Hz',shoulders:'380→560 Hz'},
+    m3_timbral:{hips:'thud',wrists:'bell',shoulders:'thump'},
+    m4_mbson:{hips:'low ring',wrists:'bright ring',shoulders:'warm ring'},
+    m5_impact:{hips:'force → tone',wrists:'force → slap',shoulders:'force → tone'},
+    m6_descent:{hips:'falling pitch, accent',wrists:'accent',shoulders:'accent'},
+    m7_harmony:{hips:'root',wrists:'3rd',shoulders:'5th'},
+  };
+  const getIntensity=()=>parseFloat($('#intenSlider').value);
+  const LABEL=window.PART_LABEL;
+  const dot=c=>`<span class="dot" style="background:${c}"></span>`;
+
+  /* ---------- opening seal ---------- */
+  (function(){ const sp=$('#splash'); if(!sp) return;
+    const done=()=>{ sp.classList.add('gone'); setTimeout(()=>sp.remove(),520); };
+    const reduce=window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches;
+    setTimeout(done,reduce?300:1900); sp.addEventListener('pointerdown',done); })();
+
+  /* ---------- light / dark ---------- */
+  (function(){ const b=$('#themeBtn'); if(!b) return;
+    const sysDark=()=>window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches;
+    const cur=()=>document.documentElement.dataset.theme||(sysDark()?'dark':'light');
+    const paint=()=>{ const d=cur()==='dark'; b.setAttribute('aria-label',d?'Switch to light appearance':'Switch to dark appearance'); b.setAttribute('aria-pressed',d);
+      const m=$('meta[name=theme-color]'); if(m) m.content=d?'#1a1917':'#f4f1eb'; };
+    b.addEventListener('click',()=>{ const next=cur()==='dark'?'light':'dark'; document.documentElement.dataset.theme=next;
+      try{ localStorage.setItem('ukemi.theme',next); }catch(e){} paint(); });
+    paint(); })();
+
+  /* ---------- navigation ---------- */
+  function go(view){
+    $$('.navlink').forEach(x=>{ const on=x.dataset.view===view; x.classList.toggle('active',on); if(on) x.setAttribute('aria-current','page'); else x.removeAttribute('aria-current'); });
+    $$('.view').forEach(v=>v.classList.toggle('active',v.id==='view-'+view));
+    window.scrollTo({top:0});
+  }
+  $$('.navlink').forEach(n=>n.addEventListener('click',()=>go(n.dataset.view)));
+  $$('[data-goto]').forEach(n=>n.addEventListener('click',()=>go(n.dataset.goto)));
+
+  /* ---------- sound chips ---------- */
+  function buildChips(host,onPick){
+    host.innerHTML='';
+    MODES.forEach(m=>{ const c=document.createElement('button'); c.type='button'; c.className='chip'+(m.id===currentMode?' on':'');
+      c.dataset.id=m.id; c.title=m.title; c.setAttribute('aria-pressed',m.id===currentMode);
+      c.innerHTML=`<span class="n">${m.n}</span>${m.short}`;
+      c.addEventListener('click',()=>{ setMode(m.id); onPick&&onPick(m.id); }); host.appendChild(c); });
+  }
+  function refreshChips(){ $$('.chip').forEach(c=>{ const on=c.dataset.id===currentMode; c.classList.toggle('on',on); c.setAttribute('aria-pressed',on); }); }
+
+  /* ---------- levels ---------- */
+  function buildProg(host,onPick){
+    host.innerHTML='';
+    PROGRESSIONS.forEach(p=>{
+      const el=document.createElement('button'); el.type='button'; el.className='proglevel'+(p.id===currentProg?' on':''); el.dataset.id=p.id;
+      el.setAttribute('aria-pressed',p.id===currentProg);
+      const bars=[1,2,3,4].map(i=>`<i class="${i<=p.level?'f':''}"></i>`).join('');
+      el.innerHTML=`<span class="lv">Level ${p.level}</span><span class="nm">${p.label}</span><span class="jp" lang="ja">${p.jp}</span><span class="diff" aria-hidden="true">${bars}</span>`;
+      el.addEventListener('click',()=>{ setProgression(p.id); onPick&&onPick(p.id); });
+      host.appendChild(el);
+    });
+  }
+  function setProgression(id){
+    currentProg=id; const P=PROG_BY_ID[id];
+    window.Research&&Research.logEvent({type:'progression_change',progression:id});
+    $$('.proglevel').forEach(e=>{ const on=e.dataset.id===id; e.classList.toggle('on',on); e.setAttribute('aria-pressed',on); });
+    if(anim) anim.setProgression(id);
+    if(trainer) trainer.setProgression(id);
+    const pn=$('#progNote'); if(pn) pn.innerHTML=`<b>Level ${P.level}, ${P.label.toLowerCase()}.</b> ${P.desc}`;
+    const tpn=$('#trProgNote'); if(tpn) tpn.textContent=`Listening for: ${P.expected.map(x=>LABEL[x].toLowerCase()).join(', then ')}.`;
+    buildSeq();
+  }
+
+  function setMode(id){
+    currentMode=id; Sono.setMode(id); refreshChips();
+    window.Research&&Research.logEvent({type:'mode_change',mode:id});
+    const m=MODE_BY_ID[id];
+    $('#stageTagTxt').textContent=m.title;
+    $('#trMode').textContent=m.short;
+    $('#modeNote').innerHTML=`<b>Mode ${m.n}, ${m.title}.</b> ${m.blurb}`;
+    buildSeq();
+  }
+
+  /* ---------- landing sequence ---------- */
+  function buildSeq(){
+    const host=$('#seqTrack'); host.innerHTML='';
+    const hints=SEQ_HINT[currentMode]||{};
+    const exp=(PROG_BY_ID[currentProg]||{}).expected||PARTS.map(p=>p.id);
+    let ord=0;
+    exp.map(id=>PARTS.find(p=>p.id===id)).filter(Boolean).forEach(p=>{ ord++; const s=document.createElement('button'); s.type='button'; s.className='step'; s.dataset.part=p.id;
+      s.style.setProperty('--bp',p.color);
+      s.setAttribute('aria-label',`Play the ${p.label.toLowerCase()} sound`);
+      s.innerHTML=`<span class="ord">${ord}</span><span class="nm">${p.label}<small lang="ja">${p.jp}</small></span><span class="hz">${hints[p.id]||''}</span>`;
+      s.addEventListener('click',()=>{ Sono.trigger(p.id,{intensity:getIntensity(),pan:0}); flashStep(p.id); });
+      host.appendChild(s); });
+    const pr=document.createElement('button'); pr.type='button'; pr.className='step protected';
+    pr.setAttribute('aria-label','Play the elbow caution sound');
+    pr.innerHTML=`<span class="ord"></span><span class="nm">Elbow<small lang="ja">肘</small></span><span class="hz">never lands</span>`;
+    pr.addEventListener('click',()=>{ Sono.resume(); Sono.caution(); });
+    host.appendChild(pr);
+  }
+  function flashStep(part){ const s=$(`.step[data-part="${part}"]`); if(!s) return;
+    s.classList.add('fired','flash'); setTimeout(()=>s.classList.remove('flash'),500); }
+  function clearSteps(){ $$('#seqTrack .step').forEach(s=>s.classList.remove('fired','flash','err')); }
+
+  /* ---------- demo stage ---------- */
+  let anim, fellComplete=false;
+  function initStage(){
+    anim=new Ukemi($('#judoka'),{
+      onStart:()=>{ clearSteps(); fellComplete=false; if(currentMode==='m6_descent') Sono.startFall();
+        window.Research&&Research.logEvent({type:'trial_start',source:'demo',mode:currentMode,progression:currentProg}); },
+      onContact:(part)=>{ Sono.trigger(part,{intensity:getIntensity(),pan:0}); flashStep(part);
+        window.Research&&Research.logEvent({type:'contact',part,source:'demo',mode:currentMode,progression:currentProg,intensity:getIntensity()});
+        // the sequence is complete on its last expected landing
+        const exp=PROG_BY_ID[currentProg].expected;
+        if(part===exp[exp.length-1]){ fellComplete=true; if(currentMode==='m7_harmony') setTimeout(()=>Sono.resolveChord(true),260); } },
+      onFrame:({h,x})=>{ if(currentMode==='m6_descent') Sono.updateFall(h,x); },
+      onEnd:()=>{ if(currentMode==='m6_descent') Sono.endFall(); },
+      onReset:()=>{ clearSteps(); if(currentMode==='m6_descent') Sono.endFall(); },
+    });
+    window.__demoAnim=anim;
+  }
+  const playFall=()=>{ Sono.resume(); anim.play(speed); };
+  $('#playBtn').addEventListener('click',playFall);
+  const hp=$('#heroPlay'); hp&&hp.addEventListener('click',()=>{ $('#dojo').scrollIntoView({behavior:'smooth',block:'center'}); playFall(); });
+  $('#resetBtn').addEventListener('click',()=>anim.reset());
+  $('#errBtn').addEventListener('click',()=>{ Sono.resume(); Sono.error();
+    window.Research&&Research.logEvent({type:'head_error',source:'demo',mode:currentMode,progression:currentProg});
+    $$('#seqTrack .step:not(.protected)').forEach(x=>{x.classList.add('err');setTimeout(()=>x.classList.remove('err'),600);}); });
+  $('#speedSeg').addEventListener('click',e=>{ const b=e.target.closest('button'); if(!b)return;
+    speed=parseFloat(b.dataset.s); $$('#speedSeg button').forEach(x=>{ x.classList.toggle('on',x===b); x.setAttribute('aria-pressed',x===b); }); });
+  $('#intenSlider').addEventListener('input',e=>{ const v=parseFloat(e.target.value);
+    $('#intenVal').textContent=v<0.34?'soft':v<0.7?'medium':'hard'; });
+
+  /* ---------- sound library ---------- */
+  function buildLibrary(){
+    const study=$('#studyModes'), ext=$('#extModes'); study.innerHTML=''; ext.innerHTML='';
+    MODES.forEach(m=>{
+      const card=document.createElement('article'); card.className='modecard card';
+      const cites=m.cites.map(c=>`<li>${c}</li>`).join('');
+      const mapc=m.map.map(x=>`<span class="mp">${x}</span>`).join('');
+      const parts=PARTS.map(p=>`<button type="button" class="bp-btn" data-mode="${m.id}" data-part="${p.id}">${dot(p.color)}${p.label}</button>`).join('');
+      card.innerHTML=`
+        <header class="top">
+          <span class="num" aria-hidden="true">${m.n}</span>
+          <div><h3 class="mt">${m.title}</h3><p class="kind">${m.kind}</p></div>
+        </header>
+        <p class="desc">${m.blurb}</p>
+        <div class="play" role="group" aria-label="Listen to ${m.title}">${parts}<button type="button" class="bp-btn quiet" data-mode="${m.id}" data-part="elbows">${dot(PART_COLOR.elbows)}Elbow caution</button><button type="button" class="bp-btn quiet" data-mode="${m.id}" data-part="head">${dot(PART_COLOR.head)}Head alarm</button></div>
+        <dl class="facts">
+          <div><dt>Made for</dt><dd>${m.best}</dd></div>
+          <div><dt>Trade-off</dt><dd>${m.limit}</dd></div>
+        </dl>
+        <details class="just">
+          <summary>Why it is built this way</summary>
+          <div class="map">${mapc}</div>
+          <p>${m.just}</p>
+          <ul class="cites">${cites}</ul>
+        </details>`;
+      (m.group==='study'?study:ext).appendChild(card);
+    });
+    $$('.bp-btn').forEach(b=>b.addEventListener('click',()=>{ Sono.resume();
+      const press=()=>b.animate([{transform:'scale(.94)'},{transform:'scale(1)'}],{duration:180});
+      if(b.dataset.part==='elbows'){ Sono.caution(); press(); return; }
+      if(b.dataset.part==='head'){ Sono.preview(b.dataset.mode,'head'); press(); return; }
+      const inten=b.dataset.part==='wrists'?0.85:0.55+Math.random()*0.25;
+      Sono.preview(b.dataset.mode,b.dataset.part,{intensity:inten,pan:0}); press(); }));
+  }
+
+  /* ---------- design spectrum (Science) ---------- */
+  function buildSpectrum(){
+    const host=$('#spectrum'); if(host){
+      const sorted=MODES.slice().sort((a,b)=>a.spectrum-b.spectrum);
+      host.innerHTML=`<div class="sp-axis"><span>Analogic<small>sounds like the thing itself</small></span><span>Symbolic<small>meaning has to be learned</small></span></div>
+        <div class="sp-track">${sorted.map((m,i)=>`<div class="sp-pt${m.group==='study'?' core':''} ${i%2?'dn':'up'}${m.spectrum>0.8?' r':m.spectrum<0.15?' l':''}" style="left:${(m.spectrum*100).toFixed(1)}%"><i></i><b>${m.n}</b><span>${m.short}</span></div>`).join('')}</div>
+        <p class="sp-key"><span class="k core"></span>core set<span class="k"></span>extension</p>`; }
+    const tb=$('#modeTable tbody'); if(tb){
+      tb.innerHTML=MODES.map(m=>`<tr><th scope="row"><span class="tn">${m.n}</span>${m.short}</th><td>${m.kind}</td><td>${m.carried}</td><td>${m.best}</td></tr>`).join(''); }
+  }
+
+  /* ---------- trainer ---------- */
+  let trainer, elbowWarns=0;
+  function initTrainer(){
+    trainer=new Trainer({video:$('#vid'),canvas:$('#poseCv'),overlay:$('#trainOverlay')},{
+      onContact:(part,info={})=>{
+        const col=window.PART_COLOR[part]||'#fff';
+        if(info.caution){ window.Research&&Research.logEvent({type:'elbow_caution',source:'trainer',mode:Sono.getMode(),progression:currentProg});
+          elbowWarns++; const ew=$('#trElbow'); if(ew){ ew.textContent=elbowWarns; ew.classList.add('bad'); }
+          $('#trLast').innerHTML=`${dot(PART_COLOR.elbows)}Elbow, lift it`; return; }
+        if(info.error){ window.Research&&Research.logEvent({type:'head_error',source:'trainer',mode:Sono.getMode(),progression:currentProg}); }
+        else{ window.Research&&Research.logEvent({type:'contact',part,source:'trainer',mode:Sono.getMode(),progression:currentProg,intensity:info.intensity});
+          if(info.complete) window.Research&&Research.logEvent({type:'sequence_complete',source:'trainer',mode:Sono.getMode(),progression:currentProg}); }
+        if(info.error){ $('#trLast').innerHTML=`${dot(PART_COLOR.head)}Head`; $('#trSeq').textContent='Start again'; $('#trSeq').classList.remove('good'); return; }
+        $('#trLast').innerHTML=`${dot(col)}${LABEL[part]||part}`;
+        $('#trSeq').textContent=info.complete?'Complete':'In progress';
+        $('#trSeq').classList.toggle('good',!!info.complete);
+        if(info.complete) setTimeout(()=>{ $('#trSeq').textContent='Ready'; $('#trSeq').classList.remove('good'); },1400);
+      },
+      onCalib:(msg)=>{ setCalibNote(msg,'busy'); qsState=2; qsSet(2); },
+      onCalibTick:(left)=>{ if(qsState===2) $('#qsBtn').textContent=`Cancel (${left})`; },
+      onCalibFail:(msg)=>{ setCalibNote(/cancelled/i.test(msg)?msg:'Calibration failed. '+msg,'bad');
+        qsState=trainer.running?(trainer.calibrated?3:1):0; qsSet(qsState); },
+      onCalibDone:(th,info)=>{ const tilt=info?Math.round(Math.atan(info.slope)*180/Math.PI):0;
+        setCalibNote(`Calibrated. The mat line sits at ${th.toFixed(3)}${tilt?` and is tilted ${tilt}° to follow the camera`:''}. Sit or stand up and start.`,'good');
+        $('#thSlider').value=th; $('#thVal').textContent=th.toFixed(3); window.Research&&Research.setThreshold(th);
+        window.Research&&Research.logEvent&&Research.logEvent({type:'calibration',source:'trainer',threshold:th,slope:info&&info.slope});
+        qsState=3; qsSet(3); },
+      onHud:(msg,cls)=>{ const h=$('#trHud'); if(!h) return; h.textContent=msg; h.className='hud'+(cls?' '+cls:''); },
+      onPose:(lms,ts)=>{ window.Research&&Research.logPose(lms,ts); },
+      onModel:(key,info,pref)=>{ window.Research&&Research.setModel&&Research.setModel(key);
+        const n=$('#modelNote'); if(n&&info) n.textContent=pref==='auto'
+          ?`Auto is using ${info.label} on this device.`
+          :`${info.label} is selected. It downloads about ${info.mb} MB the first time.`; },
+    });
+    const setCalibNote=(msg,cls)=>{ const n=$('#calibNote'); n.textContent=msg; n.className='note '+(cls||''); };
+    $('#camStart').addEventListener('click',async()=>{ await trainer.start(); if(trainer.running){ qsState=trainer.calibrated?3:1; qsSet(qsState); } });
+    $('#camStop').addEventListener('click',()=>{ trainer.cancelCalib(); trainer.stop(); releaseWake(); qsState=0; qsSet(0); });
+    $('#calibBtn').addEventListener('click',()=>trainer.calibrateLying(calibDelay));
+    const camSel=$('#camSel'), mirChk=$('#mirChk');
+    async function fillCams(){ const cams=await Trainer.listCameras(); if(!camSel) return;
+      camSel.innerHTML=cams.map((c,i)=>`<option value="${c.deviceId}">${(c.label||('Camera '+(i+1))).replace(/</g,'&lt;')}</option>`).join('')||'<option value="">Default camera</option>';
+      if(trainer.deviceId) camSel.value=trainer.deviceId;
+      $('#camField').hidden=cams.length<2; if(mirChk) mirChk.checked=trainer.mirror!==false; }
+    trainer.opts.onCameraReady=()=>fillCams();
+    camSel&&camSel.addEventListener('change',async()=>{ await trainer.switchCamera(camSel.value); if(mirChk) mirChk.checked=trainer.mirror!==false; });
+    mirChk&&mirChk.addEventListener('change',()=>trainer.setMirror(mirChk.checked));
+    navigator.mediaDevices&&navigator.mediaDevices.addEventListener&&navigator.mediaDevices.addEventListener('devicechange',fillCams);
+    // tracking model
+    const markModel=()=>$$('#modelSeg button').forEach(x=>{ const on=x.dataset.m===trainer.modelPref; x.classList.toggle('on',on); x.setAttribute('aria-pressed',on); });
+    $$('#modelSeg button').forEach(x=>x.addEventListener('click',()=>{ trainer.setModel(x.dataset.m); markModel(); }));
+    markModel(); trainer.setModel(trainer.modelPref);
+    // keyboard on a computer: C = calibrate / cancel, Esc = cancel
+    document.addEventListener('keydown',e=>{ if(!trainer.running||/INPUT|SELECT|TEXTAREA/.test(e.target.tagName)) return;
+      if(e.key==='c'||e.key==='C'){ e.preventDefault(); trainer.calib?trainer.cancelCalib():trainer.calibrateLying(calibDelay); }
+      else if(e.key==='Escape'&&trainer.calib) trainer.cancelCalib(); });
+    $('#thSlider').addEventListener('input',e=>{ const v=parseFloat(e.target.value); trainer.setThreshold(v,true); $('#thVal').textContent=v.toFixed(3); window.Research&&Research.setThreshold(v);
+      if(trainer.running&&qsState===1){ qsState=3; qsSet(3); } });
+  }
+
+  /* ---------- three-step start ---------- */
+  let wakeLock=null;
+  async function grabWake(){ try{ wakeLock=await navigator.wakeLock.request('screen'); }catch(e){} }
+  function releaseWake(){ try{ wakeLock&&wakeLock.release(); }catch(e){} wakeLock=null; }
+  document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible'&&wakeLock) grabWake(); });
+  // 0 idle · 1 camera on, not calibrated · 2 calibrating · 3 calibrated, training
+  function qsSet(step){
+    [1,2,3].forEach(i=>{ const el=$('#qs'+i); if(!el) return;
+      el.classList.toggle('done', i===1?step>=1:step>=3&&i===2);
+      el.classList.toggle('on', i===1?step===0:i===2?(step===1||step===2):step>=3); });
+    const b=$('#qsBtn'); if(!b) return;
+    b.textContent = step===0?'Start camera' : step===1?'Calibrate' : step===2?'Cancel' : 'Recalibrate';
+    b.classList.toggle('primary',step<2);
+    const qd=$('#qsDelay'), qs=$('#qsStop'); if(qd) qd.hidden=!(step===1||step===3); if(qs) qs.hidden=step===0;
+  }
+  let qsState=0;
+  let calibDelay=10; try{ calibDelay=parseInt(localStorage.getItem('ukemi.calibDelay')??'10',10); }catch(e){} if(isNaN(calibDelay)) calibDelay=10;
+  const markDelay=()=>$$('#qsDelay button').forEach(x=>{ const on=+x.dataset.d===calibDelay; x.classList.toggle('on',on); x.setAttribute('aria-pressed',on); });
+  $$('#qsDelay button').forEach(x=>x.addEventListener('click',()=>{ calibDelay=+x.dataset.d; try{ localStorage.setItem('ukemi.calibDelay',calibDelay); }catch(e){} markDelay(); }));
+  markDelay();
+  $('#qsBtn').addEventListener('click',async()=>{
+    Sono.resume();
+    if(qsState===0){
+      grabWake(); $('#qsBtn').textContent='Starting…';
+      await trainer.start();
+      if(!trainer.running){ qsState=0; qsSet(0); releaseWake(); return; }
+      qsState=trainer.calibrated?3:1; qsSet(qsState);
+    } else if(qsState===2){ trainer.cancelCalib(); }
+    else { trainer.calibrateLying(calibDelay); }
+  });
+  $('#qsStop')&&$('#qsStop').addEventListener('click',()=>{ trainer.cancelCalib(); trainer.stop(); releaseWake(); qsState=0; qsSet(0); });
+
+  /* ---------- boot ---------- */
+  buildChips($('#demoChips'));
+  buildChips($('#trChips'));
+  buildProg($('#progLevels'));
+  buildProg($('#trProg'));
+  buildSeq(); buildLibrary(); buildSpectrum(); initStage(); initTrainer();
+  Research.init();
+  setMode(currentMode);
+  setProgression(currentProg);
+  qsSet(0);
+  // arm audio on the first interaction anywhere
+  document.body.addEventListener('pointerdown',()=>Sono.resume(),{once:true});
+})();
+
+</script>
+</body>
+</html>
