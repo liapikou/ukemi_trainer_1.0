@@ -3,7 +3,7 @@
    shows up on the next visit; the cached copy is the offline fallback.
    The MediaPipe model, its wasm and the fonts are cached on first use,
    so the trainer works offline afterwards. */
-const CACHE = 'ukemi-v23';
+const CACHE = 'ukemi-v24';
 const SHELL = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', e => {
